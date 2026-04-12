@@ -71,9 +71,20 @@ export const useAppStore = create(
 
       // Grocery list (local cache)
       groceryItems: [],
-      addGroceryItem: (item) => set((s) => ({
-        groceryItems: [...s.groceryItems, { id: Date.now().toString(), checked: false, ...item }],
-      })),
+      addGroceryItem: (item) => set((s) => {
+        const key = item.name?.toLowerCase().trim()
+        const existing = s.groceryItems.find((i) => i.name?.toLowerCase().trim() === key)
+        if (existing) {
+          return {
+            groceryItems: s.groceryItems.map((i) =>
+              i.id === existing.id
+                ? { ...i, checked: false, amount: i.amount && item.amount ? `${i.amount} + ${item.amount}` : (i.amount || item.amount) }
+                : i
+            ),
+          }
+        }
+        return { groceryItems: [...s.groceryItems, { id: Date.now().toString(), checked: false, ...item }] }
+      }),
       toggleGroceryItem: (id) => set((s) => ({
         groceryItems: s.groceryItems.map((i) => i.id === id ? { ...i, checked: !i.checked } : i),
       })),

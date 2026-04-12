@@ -13,6 +13,7 @@ import AddRecipe from './pages/AddRecipe'
 import RecipeDetail from './pages/RecipeDetail'
 import CookingMode from './pages/CookingMode'
 import MealPlan from './pages/MealPlan'
+import Grocery from './pages/Grocery'
 import Profile from './pages/Profile'
 import Auth from './pages/Auth'
 import AdminScreen from './pages/AdminScreen'
@@ -37,6 +38,7 @@ function AppRoutes() {
       <Route path="/add" element={<AppShell><AddRecipe /></AppShell>} />
       <Route path="/recipe/:id" element={<AppShell><RecipeDetail /></AppShell>} />
       <Route path="/meal-plan" element={<AppShell><MealPlan /></AppShell>} />
+      <Route path="/grocery" element={<AppShell><Grocery /></AppShell>} />
       <Route path="/profile" element={<AppShell><Profile /></AppShell>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
