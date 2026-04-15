@@ -4,7 +4,7 @@ import {
   ArrowLeft, Clock, Users, Star, ChefHat, ShoppingCart,
   Minus, Plus, Trash2, Check, Share2, Play
 } from 'lucide-react'
-import { useRecipe, useLogMadeIt, useDeleteRecipe } from '../hooks/useRecipes'
+import { useRecipe, useLogMadeIt, useDeleteRecipe, useSimilarRecipes } from '../hooks/useRecipes'
 import { useAppStore } from '../stores/useAppStore'
 import toast from 'react-hot-toast'
 
@@ -15,6 +15,8 @@ export default function RecipeDetail() {
   const logMadeIt = useLogMadeIt()
   const deleteRecipe = useDeleteRecipe()
   const { addGroceryItem, logCook, incrementGroceryListsGenerated } = useAppStore()
+
+  const similarRecipes = useSimilarRecipes(recipe)
 
   const [servingScale, setServingScale] = useState(1)
   const [showMadeItModal, setShowMadeItModal] = useState(false)
@@ -270,6 +272,43 @@ export default function RecipeDetail() {
                 {(() => { try { return new URL(recipe.source_url).hostname.replace('www.', '') } catch { return recipe.source_url } })()}
               </p>
             </a>
+          </div>
+        )}
+
+        {/* Similar Recipes */}
+        {similarRecipes.length > 0 && (
+          <div className="mb-6">
+            <h2 className="font-display font-semibold text-lg text-gray-900 dark:text-stone-50 mb-3">
+              You might also like
+            </h2>
+            <div className="flex gap-3 overflow-x-auto pb-2 -mx-5 px-5 scrollbar-none">
+              {similarRecipes.map((r) => (
+                <Link
+                  key={r.id}
+                  to={`/recipe/${r.id}`}
+                  className="flex-shrink-0 w-36 bg-white dark:bg-stone-800 rounded-2xl shadow-card overflow-hidden active:scale-95 transition-transform"
+                >
+                  <div className="h-24 bg-warm-100 dark:bg-stone-700 overflow-hidden">
+                    {r.thumbnail_url ? (
+                      <img src={r.thumbnail_url} alt={r.title} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <ChefHat size={28} className="text-warm-300 dark:text-stone-600" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-2.5">
+                    <p className="text-xs font-semibold text-gray-900 dark:text-stone-50 leading-tight line-clamp-2">{r.title}</p>
+                    {((r.prep_time || 0) + (r.cook_time || 0)) > 0 && (
+                      <p className="text-[10px] text-warm-400 dark:text-stone-500 mt-1 flex items-center gap-1">
+                        <Clock size={9} />
+                        {(r.prep_time || 0) + (r.cook_time || 0)} min
+                      </p>
+                    )}
+                  </div>
+                </Link>
+              ))}
+            </div>
           </div>
         )}
       </div>

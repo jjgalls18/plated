@@ -131,6 +131,51 @@ export function useDeleteRecipe() {
   })
 }
 
+// --- Similar recipes by shared proteins / key ingredients ---
+const PROTEIN_KEYWORDS = [
+  'chicken', 'beef', 'pork', 'salmon', 'shrimp', 'turkey', 'lamb', 'tuna',
+  'cod', 'tilapia', 'crab', 'lobster', 'scallop', 'bacon', 'sausage', 'ham',
+  'fish', 'steak', 'ground beef', 'ground turkey', 'ground pork',
+]
+const MAIN_KEYWORDS = [
+  'pasta', 'rice', 'noodle', 'potato', 'lentil', 'chickpea', 'tofu',
+  'egg', 'mushroom', 'tomato', 'spinach', 'broccoli',
+]
+
+function extractKeywords(recipe) {
+  const text = [
+    recipe.title,
+    ...(recipe.ingredients?.map((i) => i.name) || []),
+    ...(recipe.tags || []),
+  ].join(' ').toLowerCase()
+
+  const found = new Set()
+  for (const kw of [...PROTEIN_KEYWORDS, ...MAIN_KEYWORDS]) {
+    if (text.includes(kw)) found.add(kw)
+  }
+  return found
+}
+
+export function useSimilarRecipes(recipe) {
+  const { data: allRecipes = [] } = useRecipes()
+  if (!recipe) return []
+
+  const currentKws = extractKeywords(recipe)
+  if (currentKws.size === 0) return []
+
+  return allRecipes
+    .filter((r) => r.id !== recipe.id)
+    .map((r) => {
+      const kws = extractKeywords(r)
+      const shared = [...currentKws].filter((k) => kws.has(k))
+      return { recipe: r, score: shared.length }
+    })
+    .filter(({ score }) => score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 6)
+    .map(({ recipe: r }) => r)
+}
+
 // --- Log "made it" ---
 export function useLogMadeIt() {
   const qc = useQueryClient()
