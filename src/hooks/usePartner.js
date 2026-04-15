@@ -20,7 +20,18 @@ export function usePartner() {
         .single()
 
       if (profile) {
-        setInviteCode(profile.invite_code)
+        let code = profile.invite_code
+
+        // Auto-generate a code if missing
+        if (!code) {
+          code = Math.random().toString(36).substring(2, 10).toUpperCase()
+          await supabase
+            .from('profiles')
+            .update({ invite_code: code })
+            .eq('id', user.id)
+        }
+
+        setInviteCode(code)
 
         // If already linked, fetch partner profile
         if (profile.partner_id) {
