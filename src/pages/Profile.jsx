@@ -2,11 +2,13 @@ import { useState } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { useAppStore, calculateStreak } from '../stores/useAppStore'
 import { useRecipes } from '../hooks/useRecipes'
+import { usePartner } from '../hooks/usePartner'
 import { isSupabaseConfigured } from '../lib/supabase'
 import toast from 'react-hot-toast'
 import {
-  ChefHat, Flame, Star, Zap, ShoppingCart, Settings,
-  LogOut, Eye, EyeOff, Check, X, ShoppingBag, Sun, Moon
+  ChefHat, Flame, Star, Zap, ShoppingCart,
+  LogOut, Eye, EyeOff, Check, X, ShoppingBag, Sun, Moon,
+  Copy, UserPlus, Link2, Link2Off
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 
@@ -14,9 +16,12 @@ export default function Profile() {
   const { signOut } = useAuth()
   const { data: recipes = [] } = useRecipes()
   const { aiEnabled, setAiEnabled, anthropicApiKey, setAnthropicApiKey, groceryItems, toggleGroceryItem, clearCheckedItems, cookedDates, darkMode, setDarkMode } = useAppStore()
+  const { inviteCode, partner, joinWithCode, unlinkPartner } = usePartner()
   const [showApiKey, setShowApiKey] = useState(false)
   const [apiKeyInput, setApiKeyInput] = useState(anthropicApiKey)
   const [activeTab, setActiveTab] = useState('overview')
+  const [joinCode, setJoinCode] = useState('')
+  const [joining, setJoining] = useState(false)
 
   const totalCooked = recipes.reduce((sum, r) => sum + (r.made_count || 0), 0)
   const avgRating = recipes.filter((r) => r.rating).reduce((sum, r, _, arr) => sum + r.rating / arr.length, 0)
@@ -83,6 +88,99 @@ export default function Profile() {
               <StatBlock icon={<Flame size={16} />} value={streak} label="Streak" />
             </div>
           </div>
+
+          {/* Partner sync */}
+          {isSupabaseConfigured && (
+            <div className="bg-white dark:bg-stone-800 rounded-2xl shadow-card p-5">
+              {partner ? (
+                <div>
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-10 h-10 bg-green-50 dark:bg-green-900/30 rounded-xl flex items-center justify-center">
+                      <Link2 size={18} className="text-green-600 dark:text-green-400" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-gray-900 dark:text-stone-50 text-sm">Linked with {partner.display_name || 'Partner'}</p>
+                      <p className="text-xs text-green-600 dark:text-green-400">Sharing recipes & grocery list</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      await unlinkPartner()
+                      toast.success('Accounts unlinked')
+                    }}
+                    className="flex items-center gap-2 text-xs text-warm-400 dark:text-stone-500 hover:text-red-400 transition-colors"
+                  >
+                    <Link2Off size={12} />
+                    Unlink accounts
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 bg-primary-50 dark:bg-primary/20 rounded-xl flex items-center justify-center">
+                      <UserPlus size={18} className="text-primary" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-gray-900 dark:text-stone-50 text-sm">Invite your partner</p>
+                      <p className="text-xs text-warm-400 dark:text-stone-500">Share your code or enter theirs</p>
+                    </div>
+                  </div>
+
+                  {/* Your invite code */}
+                  {inviteCode && (
+                    <div className="mb-4">
+                      <p className="text-[11px] font-semibold text-warm-400 dark:text-stone-500 uppercase tracking-wide mb-1.5">Your invite code</p>
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 bg-warm-100 dark:bg-stone-700 rounded-xl px-4 py-2.5">
+                          <p className="font-mono font-bold text-lg text-gray-900 dark:text-stone-50 tracking-widest">{inviteCode.toUpperCase()}</p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(inviteCode.toUpperCase())
+                            toast.success('Code copied!')
+                          }}
+                          className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center active:scale-90 transition-transform"
+                        >
+                          <Copy size={16} className="text-white" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Enter partner code */}
+                  <p className="text-[11px] font-semibold text-warm-400 dark:text-stone-500 uppercase tracking-wide mb-1.5">Enter partner's code</p>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={joinCode}
+                      onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                      placeholder="XXXXXXXX"
+                      maxLength={8}
+                      className="flex-1 bg-warm-100 dark:bg-stone-700 rounded-xl px-4 py-2.5 font-mono font-bold text-gray-900 dark:text-stone-50 placeholder-warm-300 dark:placeholder-stone-600 outline-none focus:ring-2 focus:ring-primary/30 tracking-widest text-sm"
+                    />
+                    <button
+                      disabled={joinCode.length < 6 || joining}
+                      onClick={async () => {
+                        setJoining(true)
+                        try {
+                          const p = await joinWithCode(joinCode)
+                          toast.success(`Linked with ${p.display_name || 'your partner'}! 🎉`)
+                          setJoinCode('')
+                        } catch (err) {
+                          toast.error(err.message)
+                        } finally {
+                          setJoining(false)
+                        }
+                      }}
+                      className="px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold disabled:opacity-50 active:scale-95 transition-all"
+                    >
+                      {joining ? '…' : 'Join'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Our Cookbook */}
           <div className="bg-white dark:bg-stone-800 rounded-2xl shadow-card p-5">
