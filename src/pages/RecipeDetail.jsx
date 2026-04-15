@@ -325,8 +325,8 @@ export default function RecipeDetail() {
 
       {/* Delete confirm */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black/50 flex items-end z-50 p-4" onClick={() => setShowDeleteConfirm(false)}>
-          <div className="bg-white dark:bg-stone-800 rounded-3xl p-6 w-full" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/50 flex items-end z-50 px-4 pb-nav" onClick={() => setShowDeleteConfirm(false)}>
+          <div className="bg-white dark:bg-stone-800 rounded-3xl p-6 w-full mb-2" onClick={(e) => e.stopPropagation()}>
             <h3 className="font-semibold text-gray-900 dark:text-stone-50 text-lg mb-2">Delete recipe?</h3>
             <p className="text-warm-400 dark:text-stone-400 text-sm mb-5">
               This will permanently remove "{recipe.title}" from your collection.
