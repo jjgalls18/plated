@@ -7,7 +7,8 @@ import {
 import { useRecipes } from '../hooks/useRecipes'
 import { useWeather } from '../hooks/useWeather'
 import { useAppStore, calculateStreak } from '../stores/useAppStore'
-import { MOCK_USER } from '../data/mockRecipes'
+import { useAuth } from '../hooks/useAuth'
+import { usePartner } from '../hooks/usePartner'
 import PageHeader from '../components/ui/PageHeader'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -97,7 +98,7 @@ function MiniRecipeCard({ recipe }) {
   )
 }
 
-function StreakCard({ streak }) {
+function StreakCard({ streak, myName = 'J', partnerName = 'M' }) {
   if (streak === 0) {
     return (
       <div className="bg-warm-100 dark:bg-stone-800 border border-warm-200 dark:border-stone-700 rounded-3xl p-5 flex items-center gap-4">
@@ -143,7 +144,7 @@ function StreakCard({ streak }) {
       {/* Person dots */}
       <div className="flex items-center gap-3 mt-4 pt-4 border-t border-orange-100 dark:border-orange-900/30">
         <div className="w-7 h-7 bg-primary rounded-full flex items-center justify-center shadow-soft">
-          <span className="text-white text-[10px] font-bold">{MOCK_USER.display_name[0]}</span>
+          <span className="text-white text-[10px] font-bold">{myName[0]}</span>
         </div>
         <div className="flex-1 h-2 bg-orange-100 dark:bg-orange-900/30 rounded-full overflow-hidden">
           <div
@@ -152,7 +153,7 @@ function StreakCard({ streak }) {
           />
         </div>
         <div className="w-7 h-7 bg-sage rounded-full flex items-center justify-center shadow-soft">
-          <span className="text-white text-[10px] font-bold">{MOCK_USER.partner_name[0]}</span>
+          <span className="text-white text-[10px] font-bold">{partnerName[0]}</span>
         </div>
         <span className="text-[11px] text-orange-400 dark:text-orange-500 font-semibold">{streak}/30</span>
       </div>
@@ -160,10 +161,10 @@ function StreakCard({ streak }) {
   )
 }
 
-function VsCard({ jacobCooks, madiCooks }) {
+function VsCard({ jacobCooks, madiCooks, myName = 'Jacob', partnerName = 'Madi' }) {
   const total = jacobCooks + madiCooks
   const diff = Math.abs(jacobCooks - madiCooks)
-  const leader = jacobCooks > madiCooks ? MOCK_USER.display_name : madiCooks > jacobCooks ? MOCK_USER.partner_name : null
+  const leader = jacobCooks > madiCooks ? myName : madiCooks > jacobCooks ? partnerName : null
 
   return (
     <div className="bg-white dark:bg-stone-800 rounded-3xl shadow-card p-5">
@@ -183,10 +184,10 @@ function VsCard({ jacobCooks, madiCooks }) {
         {/* Jacob */}
         <div className="flex-1 text-center">
           <div className="w-14 h-14 bg-primary rounded-2xl flex items-center justify-center mx-auto mb-2 shadow-soft">
-            <span className="text-white font-bold text-xl">{MOCK_USER.display_name[0]}</span>
+            <span className="text-white font-bold text-xl">{myName[0]}</span>
           </div>
           <p className="font-bold text-3xl text-gray-900 dark:text-stone-50">{jacobCooks}</p>
-          <p className="text-xs text-warm-400 dark:text-stone-500 mt-0.5">{MOCK_USER.display_name}</p>
+          <p className="text-xs text-warm-400 dark:text-stone-500 mt-0.5">{myName}</p>
         </div>
 
         <div className="flex flex-col items-center gap-1">
@@ -196,10 +197,10 @@ function VsCard({ jacobCooks, madiCooks }) {
         {/* Madi */}
         <div className="flex-1 text-center">
           <div className="w-14 h-14 bg-sage rounded-2xl flex items-center justify-center mx-auto mb-2 shadow-soft">
-            <span className="text-white font-bold text-xl">{MOCK_USER.partner_name[0]}</span>
+            <span className="text-white font-bold text-xl">{partnerName[0]}</span>
           </div>
           <p className="font-bold text-3xl text-gray-900 dark:text-stone-50">{madiCooks}</p>
-          <p className="text-xs text-warm-400 dark:text-stone-500 mt-0.5">{MOCK_USER.partner_name}</p>
+          <p className="text-xs text-warm-400 dark:text-stone-500 mt-0.5">{partnerName}</p>
         </div>
       </div>
 
@@ -233,7 +234,7 @@ function VsCard({ jacobCooks, madiCooks }) {
   )
 }
 
-function LastCookedCard({ entry, recipe }) {
+function LastCookedCard({ entry, recipe, myName = 'Jacob', partnerName = 'Madi' }) {
   return (
     <Link to={`/recipe/${recipe.id}`} className="block">
       <div className="bg-white dark:bg-stone-800 rounded-3xl shadow-card overflow-hidden active:scale-[0.98] transition-transform">
@@ -255,7 +256,7 @@ function LastCookedCard({ entry, recipe }) {
               {recipe.title}
             </p>
             <p className="text-sm text-warm-400 dark:text-stone-500 mt-1">
-              {entry.person === 'jacob' ? MOCK_USER.display_name : MOCK_USER.partner_name} · {timeAgo(entry.date)}
+              {entry.person === 'jacob' ? myName : partnerName} · {timeAgo(entry.date)}
             </p>
           </div>
           <ArrowRight size={16} className="text-warm-300 dark:text-stone-600 flex-shrink-0" />
@@ -424,10 +425,15 @@ function DiscoverySection({ recipes, navigate }) {
 
 export default function Home() {
   const navigate = useNavigate()
+  const { profile } = useAuth()
+  const { partner } = usePartner()
   const { data: recipes = [] } = useRecipes()
   const { weather } = useWeather()
   const { cookLog, cookedDates, darkMode, setDarkMode, mealPlan } = useAppStore()
   const streak = calculateStreak(cookedDates)
+
+  const myName = profile?.display_name || 'You'
+  const partnerName = partner?.display_name || 'Madi'
 
   const jacobCooks = cookLog.filter((e) => e.person === 'jacob').length
   const madiCooks  = cookLog.filter((e) => e.person === 'madi').length
@@ -472,7 +478,7 @@ export default function Home() {
         <p className="text-warm-400 dark:text-stone-500 text-sm font-medium">{getGreeting()}</p>
         <div className="flex items-end justify-between">
           <h1 className="font-display text-3xl font-bold text-gray-900 dark:text-stone-50">
-            {MOCK_USER.display_name} & {MOCK_USER.partner_name}
+            {myName} & {partnerName}
           </h1>
           <p className="text-warm-400 dark:text-stone-500 text-xs font-medium mb-0.5">
             {new Date().toLocaleDateString('en', { weekday: 'short', month: 'short', day: 'numeric' })}
@@ -482,18 +488,66 @@ export default function Home() {
 
       {/* Dashboard cards */}
       <div className="px-5 space-y-4 pb-8">
-        <StreakCard streak={streak} />
+        <StreakCard streak={streak} myName={myName} partnerName={partnerName} />
 
-        <VsCard jacobCooks={jacobCooks} madiCooks={madiCooks} />
+        <VsCard jacobCooks={jacobCooks} madiCooks={madiCooks} myName={myName} partnerName={partnerName} />
 
         {lastEntry && lastRecipe && (
-          <LastCookedCard entry={lastEntry} recipe={lastRecipe} />
+          <LastCookedCard entry={lastEntry} recipe={lastRecipe} myName={myName} partnerName={partnerName} />
         )}
 
         <TonightCard recipe={tonightRecipe} navigate={navigate} />
 
         {weather && (
           <WeatherCard weather={weather} suggestion={weatherSuggestion} />
+        )}
+
+        {/* Quick stats */}
+        <div className="grid grid-cols-3 gap-3">
+          <div className="bg-white dark:bg-stone-800 rounded-2xl shadow-card p-4 text-center">
+            <p className="font-bold text-2xl text-gray-900 dark:text-stone-50">{recipes.length}</p>
+            <p className="text-[11px] text-warm-400 dark:text-stone-500 mt-0.5">Recipes</p>
+          </div>
+          <div className="bg-white dark:bg-stone-800 rounded-2xl shadow-card p-4 text-center">
+            <p className="font-bold text-2xl text-gray-900 dark:text-stone-50">{cookLog.length}</p>
+            <p className="text-[11px] text-warm-400 dark:text-stone-500 mt-0.5">Times cooked</p>
+          </div>
+          <div className="bg-white dark:bg-stone-800 rounded-2xl shadow-card p-4 text-center">
+            <p className="font-bold text-2xl text-gray-900 dark:text-stone-50">{streak}</p>
+            <p className="text-[11px] text-warm-400 dark:text-stone-500 mt-0.5">Day streak</p>
+          </div>
+        </div>
+
+        {/* Recent activity */}
+        {cookLog.length > 0 && (
+          <div>
+            <p className="text-[11px] font-semibold text-warm-400 dark:text-stone-500 uppercase tracking-wide mb-3">Recent activity</p>
+            <div className="space-y-2">
+              {cookLog.slice(0, 4).map((entry, i) => {
+                const r = recipes.find((r) => r.id === entry.recipeId)
+                if (!r) return null
+                return (
+                  <Link key={i} to={`/recipe/${r.id}`} className="flex items-center gap-3 bg-white dark:bg-stone-800 rounded-2xl shadow-card p-3 active:scale-[0.98] transition-transform">
+                    <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0 bg-warm-100 dark:bg-stone-700">
+                      {r.thumbnail_url
+                        ? <img src={r.thumbnail_url} alt={r.title} className="w-full h-full object-cover" />
+                        : <div className="w-full h-full flex items-center justify-center"><ChefHat size={16} className="text-warm-300" /></div>
+                      }
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-gray-900 dark:text-stone-50 truncate">{r.title}</p>
+                      <p className="text-xs text-warm-400 dark:text-stone-500 mt-0.5">
+                        {entry.person === 'jacob' ? myName : partnerName} · {timeAgo(entry.date)}
+                      </p>
+                    </div>
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${entry.person === 'jacob' ? 'bg-primary' : 'bg-sage'}`}>
+                      <span className="text-white text-[9px] font-bold">{(entry.person === 'jacob' ? myName : partnerName)[0]}</span>
+                    </div>
+                  </Link>
+                )
+              })}
+            </div>
+          </div>
         )}
 
         <DiscoverySection recipes={recipes} navigate={navigate} />
