@@ -179,8 +179,15 @@ export default function MealPlan() {
           recipes={recipes}
           onSelect={(recipeId) => {
             setMealPlan(pickerDate, recipeId)
+            const recipe = getRecipe(recipeId)
+            if (recipe?.ingredients?.length) {
+              recipe.ingredients.forEach((ing) => addGroceryItem({ name: ing.name, amount: ing.amount }))
+              incrementGroceryListsGenerated()
+              toast.success(`Meal planned + ${recipe.ingredients.length} ingredients added to grocery list`)
+            } else {
+              toast.success('Meal planned!')
+            }
             setPickerDate(null)
-            toast.success('Meal planned!')
           }}
           onClose={() => setPickerDate(null)}
         />
