@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { useRecipe, useLogMadeIt, useDeleteRecipe, useSimilarRecipes } from '../hooks/useRecipes'
 import { useAppStore } from '../stores/useAppStore'
+import { useAuth } from '../hooks/useAuth'
 import toast from 'react-hot-toast'
 
 export default function RecipeDetail() {
@@ -15,6 +16,7 @@ export default function RecipeDetail() {
   const logMadeIt = useLogMadeIt()
   const deleteRecipe = useDeleteRecipe()
   const { addGroceryItem, logCook, incrementGroceryListsGenerated } = useAppStore()
+  const { profile } = useAuth()
 
   const similarRecipes = useSimilarRecipes(recipe)
 
@@ -320,6 +322,7 @@ export default function RecipeDetail() {
           onClose={() => setShowMadeItModal(false)}
           onSave={handleMadeItSave}
           saving={logMadeIt.isPending}
+          currentUser={profile?.display_name?.toLowerCase() === 'madi' ? 'madi' : 'jacob'}
         />
       )}
 
@@ -352,8 +355,8 @@ export default function RecipeDetail() {
   )
 }
 
-function MadeItModal({ recipe, onClose, onSave, saving }) {
-  const [person, setPerson] = useState('jacob')
+function MadeItModal({ recipe, onClose, onSave, saving, currentUser = 'jacob' }) {
+  const [person, setPerson] = useState(currentUser)
   const [rating, setRating] = useState(recipe.rating || 0)
   const [hovered, setHovered] = useState(0)
   const [notes, setNotes] = useState('')
