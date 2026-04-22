@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Link as LinkIcon, PenLine, Camera, Plus, X, ChevronRight, Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
-import { useAddRecipe } from '../hooks/useRecipes'
+import { ArrowLeft, Link as LinkIcon, PenLine, Camera, Plus, X, ChevronRight, Loader2, CheckCircle2, AlertCircle, AlertTriangle } from 'lucide-react'
+import { useAddRecipe, useRecipes } from '../hooks/useRecipes'
 import { useAppStore } from '../stores/useAppStore'
 import { extractFromVideo, extractFromWeb, isVideoUrl } from '../lib/extraction'
 import toast from 'react-hot-toast'
@@ -68,6 +68,7 @@ const STEPS_WEB = [
 
 function UrlMode({ onBack, addRecipe, navigate }) {
   const { anthropicApiKey, openaiApiKey } = useAppStore()
+  const { data: savedRecipes = [] } = useRecipes()
   const [url, setUrl] = useState('')
   const [stage, setStage] = useState('input') // input | processing | review | error
   const [stepLabel, setStepLabel] = useState('')
@@ -89,11 +90,13 @@ function UrlMode({ onBack, addRecipe, navigate }) {
           anthropicApiKey,
           openaiApiKey,
           onStep: setStepLabel,
+          savedRecipes,
         })
       } else {
         recipe = await extractFromWeb(url, {
           anthropicApiKey,
           onStep: setStepLabel,
+          savedRecipes,
         })
       }
       setExtracted(recipe)
@@ -284,6 +287,26 @@ function ProcessingScreen({ stepLabel, isVideo }) {
 
 // ─── Review Screen ────────────────────────────────────────────────────────────
 
+function ConfidenceBanner({ confidence }) {
+  if (confidence >= 0.75) return null
+  const isLow = confidence < 0.5
+  return (
+    <div className={`flex gap-3 p-4 rounded-2xl ${isLow ? 'bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800/40' : 'bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40'}`}>
+      <AlertTriangle size={16} className={`flex-shrink-0 mt-0.5 ${isLow ? 'text-rose-500' : 'text-amber-500'}`} />
+      <div>
+        <p className={`text-xs font-semibold mb-0.5 ${isLow ? 'text-rose-700 dark:text-rose-300' : 'text-amber-700 dark:text-amber-300'}`}>
+          {isLow ? 'Low confidence — review carefully' : 'Some amounts estimated'}
+        </p>
+        <p className={`text-xs leading-relaxed ${isLow ? 'text-rose-600 dark:text-rose-400' : 'text-amber-600 dark:text-amber-400'}`}>
+          {isLow
+            ? 'The video may not have stated all measurements verbally. Amounts marked "(est.)" are Claude\'s best guess — double-check before cooking.'
+            : 'A few quantities were unclear and have been estimated. Items marked "(est.)" may need adjusting.'}
+        </p>
+      </div>
+    </div>
+  )
+}
+
 function ReviewScreen({ extracted, onChange, onSave, onBack, saving }) {
   const [ingInput, setIngInput] = useState({ amount: '', name: '' })
   const [stepInput, setStepInput] = useState('')
@@ -313,6 +336,9 @@ function ReviewScreen({ extracted, onChange, onSave, onBack, saving }) {
       </div>
 
       <div className="px-5 space-y-4">
+        {/* Confidence banner */}
+        <ConfidenceBanner confidence={extracted.confidence ?? 1} />
+
         {/* Title */}
         <div className="bg-white dark:bg-stone-800 rounded-2xl shadow-card p-4">
           <label className="text-xs font-semibold text-warm-400 dark:text-stone-500 uppercase tracking-wide block mb-2">Title</label>

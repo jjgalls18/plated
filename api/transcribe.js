@@ -81,7 +81,7 @@ export default async function handler(req, res) {
     form.append('file', new Blob([audioBuffer], { type: 'audio/mpeg' }), filename)
     form.append('model', 'whisper-1')
     form.append('language', 'en')
-    form.append('prompt', 'This is a cooking recipe video. Listen for ingredients, measurements, and cooking instructions.')
+    form.append('prompt', 'This is a cooking recipe video. Listen carefully for ingredient names and measurements such as cups, tablespoons, teaspoons, ounces, grams, pounds, cloves, pinches, and handfuls. Note cooking temperatures in Fahrenheit or Celsius, cooking times in minutes or hours, and techniques like sauté, simmer, fold, whisk, dice, and mince. Capture all numbers and units precisely.')
 
     const whisperRes = await fetch('https://api.openai.com/v1/audio/transcriptions', {
       method: 'POST',
