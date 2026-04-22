@@ -6,8 +6,8 @@ import { usePartner } from '../hooks/usePartner'
 import { isSupabaseConfigured } from '../lib/supabase'
 import toast from 'react-hot-toast'
 import {
-  ChefHat, Flame, Star, Zap, ShoppingCart,
-  LogOut, Eye, EyeOff, Check, X, ShoppingBag, Sun, Moon,
+  ChefHat, Flame, Star, ShoppingCart,
+  LogOut, Check, ShoppingBag, Sun, Moon,
   Copy, UserPlus, Link2, Link2Off
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
@@ -15,10 +15,8 @@ import PageHeader from '../components/ui/PageHeader'
 export default function Profile() {
   const { signOut } = useAuth()
   const { data: recipes = [] } = useRecipes()
-  const { aiEnabled, setAiEnabled, anthropicApiKey, setAnthropicApiKey, groceryItems, toggleGroceryItem, clearCheckedItems, cookedDates, darkMode, setDarkMode } = useAppStore()
+  const { groceryItems, toggleGroceryItem, clearCheckedItems, cookedDates, darkMode, setDarkMode } = useAppStore()
   const { inviteCode, partner, joinWithCode, unlinkPartner } = usePartner()
-  const [showApiKey, setShowApiKey] = useState(false)
-  const [apiKeyInput, setApiKeyInput] = useState(anthropicApiKey)
   const [activeTab, setActiveTab] = useState('overview')
   const [joinCode, setJoinCode] = useState('')
   const [joining, setJoining] = useState(false)
@@ -27,11 +25,6 @@ export default function Profile() {
   const avgRating = recipes.filter((r) => r.rating).reduce((sum, r, _, arr) => sum + r.rating / arr.length, 0)
   const checkedCount = groceryItems.filter((i) => i.checked).length
   const streak = calculateStreak(cookedDates)
-
-  const handleSaveApiKey = () => {
-    setAnthropicApiKey(apiKeyInput)
-    toast.success('API key saved')
-  }
 
   const handleSignOut = async () => {
     await signOut()
@@ -305,69 +298,6 @@ export default function Profile() {
                   darkMode ? 'left-[26px]' : 'left-0.5'
                 }`} />
               </button>
-            </div>
-          </div>
-
-          {/* AI toggle */}
-          <div className="bg-white dark:bg-stone-800 rounded-2xl shadow-card p-5">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 bg-violet-50 dark:bg-violet-900/30 rounded-xl flex items-center justify-center">
-                <Zap size={20} className="text-violet-600 dark:text-violet-400" />
-              </div>
-              <div className="flex-1">
-                <p className="font-semibold text-gray-900 dark:text-stone-50 text-sm">AI Features</p>
-                <p className="text-warm-400 dark:text-stone-500 text-xs">Recipe extraction, suggestions, and more</p>
-              </div>
-              <button
-                onClick={() => {
-                  if (!anthropicApiKey && !aiEnabled) {
-                    toast.error('Add your Anthropic API key first')
-                    return
-                  }
-                  setAiEnabled(!aiEnabled)
-                  toast.success(aiEnabled ? 'AI features disabled' : 'AI features enabled!')
-                }}
-                className={`w-12 h-6 rounded-full transition-all duration-200 relative ${
-                  aiEnabled ? 'bg-primary' : 'bg-warm-200 dark:bg-stone-600'
-                }`}
-              >
-                <div className={`w-5 h-5 bg-white rounded-full shadow absolute top-0.5 transition-all duration-200 ${
-                  aiEnabled ? 'left-[26px]' : 'left-0.5'
-                }`} />
-              </button>
-            </div>
-
-            {/* API Key input */}
-            <div>
-              <label className="text-xs font-semibold text-warm-400 dark:text-stone-500 uppercase tracking-wide block mb-2">
-                Anthropic API Key
-              </label>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <input
-                    type={showApiKey ? 'text' : 'password'}
-                    placeholder="sk-ant-..."
-                    value={apiKeyInput}
-                    onChange={(e) => setApiKeyInput(e.target.value)}
-                    className="w-full pr-10 pl-3 py-2.5 bg-warm-100 dark:bg-stone-700 rounded-xl text-sm font-mono text-gray-900 dark:text-stone-100 placeholder-warm-300 dark:placeholder-stone-500 outline-none focus:ring-2 focus:ring-primary/30"
-                  />
-                  <button
-                    onClick={() => setShowApiKey(!showApiKey)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-warm-400 dark:text-stone-500"
-                  >
-                    {showApiKey ? <EyeOff size={14} /> : <Eye size={14} />}
-                  </button>
-                </div>
-                <button
-                  onClick={handleSaveApiKey}
-                  className="bg-primary text-white px-3 py-2 rounded-xl"
-                >
-                  <Check size={16} />
-                </button>
-              </div>
-              <p className="text-[11px] text-warm-400 dark:text-stone-500 mt-2 leading-relaxed">
-                Your key is stored locally on this device only. Never sent to any server except Anthropic's.
-              </p>
             </div>
           </div>
 
