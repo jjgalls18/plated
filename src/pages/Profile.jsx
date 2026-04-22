@@ -8,7 +8,7 @@ import toast from 'react-hot-toast'
 import {
   ChefHat, Flame, Star, ShoppingCart,
   LogOut, Check, ShoppingBag, Sun, Moon,
-  Copy, UserPlus, Link2, Link2Off
+  Copy, UserPlus, Link2, Link2Off, RotateCcw
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 
@@ -300,6 +300,20 @@ export default function Profile() {
               </button>
             </div>
           </div>
+
+          {/* Refresh */}
+          <button
+            onClick={() => window.location.reload()}
+            className="w-full bg-white dark:bg-stone-800 rounded-2xl shadow-card p-4 flex items-center gap-3 active:scale-[0.98] transition-all"
+          >
+            <div className="w-10 h-10 bg-primary-50 dark:bg-primary/20 rounded-xl flex items-center justify-center">
+              <RotateCcw size={18} className="text-primary" />
+            </div>
+            <div className="flex-1 text-left">
+              <p className="font-semibold text-gray-900 dark:text-stone-50 text-sm">Refresh app</p>
+              <p className="text-warm-400 dark:text-stone-500 text-xs mt-0.5">Force reload & pick up latest changes</p>
+            </div>
+          </button>
 
           {/* About */}
           <div className="bg-white dark:bg-stone-800 rounded-2xl shadow-card p-5 text-center">
