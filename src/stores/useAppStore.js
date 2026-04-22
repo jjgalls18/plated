@@ -40,8 +40,10 @@ export const useAppStore = create(
       // AI settings
       aiEnabled: false,
       anthropicApiKey: '',
+      openaiApiKey: '',
       setAiEnabled: (enabled) => set({ aiEnabled: enabled }),
       setAnthropicApiKey: (key) => set({ anthropicApiKey: key }),
+      setOpenaiApiKey: (key) => set({ openaiApiKey: key }),
 
       // Cooked dates for streak tracking (YYYY-MM-DD strings)
       cookedDates: [],
@@ -114,6 +116,7 @@ export const useAppStore = create(
         darkMode: state.darkMode,
         aiEnabled: state.aiEnabled,
         anthropicApiKey: state.anthropicApiKey,
+        openaiApiKey: state.openaiApiKey,
         groceryItems: state.groceryItems,
         cookedDates: state.cookedDates,
         cookLog: state.cookLog,

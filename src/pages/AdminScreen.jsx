@@ -252,13 +252,15 @@ function HealthTab({ recipes, groceryListsGenerated }) {
   )
 }
 
-function ControlsTab({ recipes, aiEnabled, setAiEnabled, anthropicApiKey, setAnthropicApiKey, qc, clearGroceryList, clearCookedDates }) {
+function ControlsTab({ recipes, aiEnabled, setAiEnabled, anthropicApiKey, setAnthropicApiKey, openaiApiKey, setOpenaiApiKey, qc, clearGroceryList, clearCookedDates }) {
   const [showKey, setShowKey] = useState(false)
   const [keyInput, setKeyInput] = useState(anthropicApiKey)
+  const [showOpenAiKey, setShowOpenAiKey] = useState(false)
+  const [openAiKeyInput, setOpenAiKeyInput] = useState(openaiApiKey)
 
   const handleSaveKey = () => {
     setAnthropicApiKey(keyInput)
-    toast.success('API key saved')
+    toast.success('Anthropic key saved')
   }
 
   const handleRemoveKey = () => {
@@ -267,6 +269,18 @@ function ControlsTab({ recipes, aiEnabled, setAiEnabled, anthropicApiKey, setAnt
     setKeyInput('')
     setAiEnabled(false)
     toast.success('API key removed')
+  }
+
+  const handleSaveOpenAiKey = () => {
+    setOpenaiApiKey(openAiKeyInput)
+    toast.success('OpenAI key saved')
+  }
+
+  const handleRemoveOpenAiKey = () => {
+    if (!window.confirm('Remove OpenAI API key? This will disable video extraction.')) return
+    setOpenaiApiKey('')
+    setOpenAiKeyInput('')
+    toast.success('OpenAI key removed')
   }
 
   const handleExportJson = () => {
@@ -370,6 +384,38 @@ function ControlsTab({ recipes, aiEnabled, setAiEnabled, anthropicApiKey, setAnt
         <p className="text-[11px] text-warm-400 dark:text-stone-500 leading-relaxed">
           Stored locally on this device only. Never sent anywhere except Anthropic.
         </p>
+
+        <div className="mt-4 pt-4 border-t border-warm-100 dark:border-stone-700">
+          <div className="flex items-center gap-2 mb-2">
+            <p className="text-xs font-semibold text-warm-400 dark:text-stone-500 uppercase tracking-wide flex-1">OpenAI Key</p>
+            <span className="text-[10px] text-warm-300 dark:text-stone-600">for video transcription</span>
+          </div>
+          <div className="flex gap-2 mb-2">
+            <div className="relative flex-1">
+              <input
+                type={showOpenAiKey ? 'text' : 'password'}
+                placeholder="sk-..."
+                value={openAiKeyInput}
+                onChange={(e) => setOpenAiKeyInput(e.target.value)}
+                className="w-full pr-10 pl-3 py-2.5 bg-warm-100 dark:bg-stone-700 rounded-xl text-sm font-mono text-gray-900 dark:text-stone-100 placeholder-warm-300 dark:placeholder-stone-500 outline-none focus:ring-2 focus:ring-primary/30"
+              />
+              <button onClick={() => setShowOpenAiKey(!showOpenAiKey)} className="absolute right-3 top-1/2 -translate-y-1/2 text-warm-400 dark:text-stone-500">
+                {showOpenAiKey ? <EyeOff size={14} /> : <Eye size={14} />}
+              </button>
+            </div>
+            <button onClick={handleSaveOpenAiKey} className="bg-primary text-white px-3 py-2 rounded-xl">
+              <Check size={16} />
+            </button>
+            {openaiApiKey && (
+              <button onClick={handleRemoveOpenAiKey} className="bg-warm-100 dark:bg-stone-700 text-rose-400 px-3 py-2 rounded-xl">
+                <X size={16} />
+              </button>
+            )}
+          </div>
+          <p className="text-[11px] text-warm-400 dark:text-stone-500 leading-relaxed">
+            Used only for Whisper audio transcription of TikTok/Instagram/YouTube videos.
+          </p>
+        </div>
       </div>
 
       {/* Export */}
@@ -473,6 +519,7 @@ export default function AdminScreen() {
     aiCostLog, clearAiCostLog,
     aiEnabled, setAiEnabled,
     anthropicApiKey, setAnthropicApiKey,
+    openaiApiKey, setOpenaiApiKey,
     groceryListsGenerated,
     clearGroceryList, clearCookedDates,
     darkMode,
@@ -533,6 +580,7 @@ export default function AdminScreen() {
             recipes={recipes}
             aiEnabled={aiEnabled} setAiEnabled={setAiEnabled}
             anthropicApiKey={anthropicApiKey} setAnthropicApiKey={setAnthropicApiKey}
+            openaiApiKey={openaiApiKey} setOpenaiApiKey={setOpenaiApiKey}
             qc={qc}
             clearGroceryList={clearGroceryList}
             clearCookedDates={clearCookedDates}
