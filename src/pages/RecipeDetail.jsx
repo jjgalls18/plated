@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
   ArrowLeft, Clock, Users, Star, ChefHat, ShoppingCart,
-  Minus, Plus, Trash2, Check, Share2, Play
+  Minus, Plus, Trash2, Check, Share2, Play, Pencil
 } from 'lucide-react'
 import { useRecipe, useLogMadeIt, useDeleteRecipe, useSimilarRecipes } from '../hooks/useRecipes'
 import { useGrocery } from '../hooks/useGrocery'
@@ -117,6 +117,12 @@ export default function RecipeDetail() {
             className="w-9 h-9 bg-white/90 dark:bg-stone-900/90 rounded-full flex items-center justify-center shadow-soft backdrop-blur-sm"
           >
             <Share2 size={15} className="text-gray-800 dark:text-stone-100" />
+          </button>
+          <button
+            onClick={() => navigate(`/recipe/${recipe.id}/edit`)}
+            className="w-9 h-9 bg-white/90 dark:bg-stone-900/90 rounded-full flex items-center justify-center shadow-soft backdrop-blur-sm"
+          >
+            <Pencil size={15} className="text-gray-800 dark:text-stone-100" />
           </button>
           <button
             onClick={() => setShowDeleteConfirm(true)}

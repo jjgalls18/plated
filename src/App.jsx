@@ -17,6 +17,7 @@ import Grocery from './pages/Grocery'
 import Profile from './pages/Profile'
 import Auth from './pages/Auth'
 import AdminScreen from './pages/AdminScreen'
+import EditRecipe from './pages/EditRecipe'
 import LoadingScreen from './components/ui/LoadingScreen'
 
 function AppRoutes() {
@@ -29,6 +30,7 @@ function AppRoutes() {
     <Routes>
       {/* Full-screen — no bottom nav */}
       <Route path="/recipe/:id/cook" element={<CookingMode />} />
+      <Route path="/recipe/:id/edit" element={<EditRecipe />} />
       <Route path="/admin" element={<AdminScreen />} />
 
       {/* Standard shell routes */}
