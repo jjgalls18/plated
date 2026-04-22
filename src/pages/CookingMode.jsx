@@ -2,15 +2,9 @@ import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { X, ChevronLeft, ChevronRight, Timer, Play, Pause, RotateCcw, Users } from 'lucide-react'
 import { useRecipe } from '../hooks/useRecipes'
-import { MOCK_USER } from '../data/mockRecipes'
+import { useAuth } from '../hooks/useAuth'
+import { usePartner } from '../hooks/usePartner'
 import toast from 'react-hot-toast'
-
-const PERSON1 = { name: MOCK_USER.display_name, bg: 'bg-primary', text: 'text-white' }
-const PERSON2 = { name: MOCK_USER.partner_name,  bg: 'bg-sage',    text: 'text-white' }
-
-function getPerson(index) {
-  return index % 2 === 0 ? PERSON1 : PERSON2
-}
 
 function formatTime(seconds) {
   const m = Math.floor(seconds / 60)
@@ -22,6 +16,15 @@ export default function CookingMode() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { data: recipe, isLoading } = useRecipe(id)
+  const { profile } = useAuth()
+  const { partner } = usePartner()
+
+  const myName = profile?.display_name || 'You'
+  const partnerName = partner?.display_name || 'Partner'
+
+  const PERSON1 = { name: myName, bg: 'bg-primary', text: 'text-white' }
+  const PERSON2 = { name: partnerName, bg: 'bg-sage', text: 'text-white' }
+  const getPerson = (index) => index % 2 === 0 ? PERSON1 : PERSON2
 
   const [stepIndex, setStepIndex] = useState(0)
   const [cookTogether, setCookTogether] = useState(false)

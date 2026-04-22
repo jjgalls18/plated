@@ -9,6 +9,7 @@ import { useWeather } from '../hooks/useWeather'
 import { useAppStore, calculateStreak } from '../stores/useAppStore'
 import { useAuth } from '../hooks/useAuth'
 import { usePartner } from '../hooks/usePartner'
+import { useCookLog } from '../hooks/useCookLog'
 import PageHeader from '../components/ui/PageHeader'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -234,14 +235,15 @@ function VsCard({ jacobCooks, madiCooks, myName = 'Jacob', partnerName = 'Madi' 
   )
 }
 
-function LastCookedCard({ entry, recipe, myName = 'Jacob', partnerName = 'Madi' }) {
+function LastCookedCard({ entry, myId, myName = 'You', partnerName = 'Partner' }) {
+  const isMe = entry.userId === myId
   return (
-    <Link to={`/recipe/${recipe.id}`} className="block">
+    <Link to={`/recipe/${entry.recipeId}`} className="block">
       <div className="bg-white dark:bg-stone-800 rounded-3xl shadow-card overflow-hidden active:scale-[0.98] transition-transform">
         <div className="flex items-center gap-4 p-4">
           <div className="w-20 h-20 rounded-2xl overflow-hidden flex-shrink-0">
-            {recipe.thumbnail_url ? (
-              <img src={recipe.thumbnail_url} alt={recipe.title} className="w-full h-full object-cover" />
+            {entry.recipeThumbnail ? (
+              <img src={entry.recipeThumbnail} alt={entry.recipeTitle} className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full bg-gradient-to-br from-primary-200 to-primary-400 flex items-center justify-center">
                 <ChefHat size={28} className="text-white opacity-50" />
@@ -253,10 +255,10 @@ function LastCookedCard({ entry, recipe, myName = 'Jacob', partnerName = 'Madi' 
               Last cooked
             </p>
             <p className="font-semibold text-gray-900 dark:text-stone-50 text-base leading-snug line-clamp-2">
-              {recipe.title}
+              {entry.recipeTitle}
             </p>
             <p className="text-sm text-warm-400 dark:text-stone-500 mt-1">
-              {entry.person === 'jacob' ? myName : partnerName} · {timeAgo(entry.date)}
+              {isMe ? myName : partnerName} · {timeAgo(entry.date)}
             </p>
           </div>
           <ArrowRight size={16} className="text-warm-300 dark:text-stone-600 flex-shrink-0" />
@@ -429,16 +431,16 @@ export default function Home() {
   const { partner } = usePartner()
   const { data: recipes = [] } = useRecipes()
   const { weather } = useWeather()
-  const { cookLog, cookedDates, darkMode, setDarkMode, mealPlan } = useAppStore()
-  const streak = calculateStreak(cookedDates)
+  const { darkMode, setDarkMode, mealPlan } = useAppStore()
+  const { entries, myId, partnerId, cookDates } = useCookLog()
+  const streak = calculateStreak(cookDates)
 
   const myName = profile?.display_name || 'You'
-  const partnerName = partner?.display_name || 'Madi'
+  const partnerName = partner?.display_name || 'Partner'
 
-  const jacobCooks = cookLog.filter((e) => e.person === 'jacob').length
-  const madiCooks  = cookLog.filter((e) => e.person === 'madi').length
-  const lastEntry  = cookLog[0] ?? null
-  const lastRecipe = lastEntry ? recipes.find((r) => r.id === lastEntry.recipeId) : null
+  const myCooks      = entries.filter((e) => e.userId === myId).length
+  const partnerCooks = entries.filter((e) => e.userId === partnerId).length
+  const lastEntry    = entries[0] ?? null
 
   const today = new Date().toISOString().split('T')[0]
   const tonightRecipeId = mealPlan[today]
@@ -490,10 +492,10 @@ export default function Home() {
       <div className="px-5 space-y-4 pb-8">
         <StreakCard streak={streak} myName={myName} partnerName={partnerName} />
 
-        <VsCard jacobCooks={jacobCooks} madiCooks={madiCooks} myName={myName} partnerName={partnerName} />
+        <VsCard jacobCooks={myCooks} madiCooks={partnerCooks} myName={myName} partnerName={partnerName} />
 
-        {lastEntry && lastRecipe && (
-          <LastCookedCard entry={lastEntry} recipe={lastRecipe} myName={myName} partnerName={partnerName} />
+        {lastEntry && (
+          <LastCookedCard entry={lastEntry} myId={myId} myName={myName} partnerName={partnerName} />
         )}
 
         <TonightCard recipe={tonightRecipe} navigate={navigate} />
@@ -509,7 +511,7 @@ export default function Home() {
             <p className="text-[11px] text-warm-400 dark:text-stone-500 mt-0.5">Recipes</p>
           </div>
           <div className="bg-white dark:bg-stone-800 rounded-2xl shadow-card p-4 text-center">
-            <p className="font-bold text-2xl text-gray-900 dark:text-stone-50">{cookLog.length}</p>
+            <p className="font-bold text-2xl text-gray-900 dark:text-stone-50">{entries.length}</p>
             <p className="text-[11px] text-warm-400 dark:text-stone-500 mt-0.5">Times cooked</p>
           </div>
           <div className="bg-white dark:bg-stone-800 rounded-2xl shadow-card p-4 text-center">
@@ -519,29 +521,29 @@ export default function Home() {
         </div>
 
         {/* Recent activity */}
-        {cookLog.length > 0 && (
+        {entries.length > 0 && (
           <div>
             <p className="text-[11px] font-semibold text-warm-400 dark:text-stone-500 uppercase tracking-wide mb-3">Recent activity</p>
             <div className="space-y-2">
-              {cookLog.slice(0, 4).map((entry, i) => {
-                const r = recipes.find((r) => r.id === entry.recipeId)
-                if (!r) return null
+              {entries.slice(0, 4).map((entry) => {
+                const isMe = entry.userId === myId
+                const name = isMe ? myName : partnerName
                 return (
-                  <Link key={i} to={`/recipe/${r.id}`} className="flex items-center gap-3 bg-white dark:bg-stone-800 rounded-2xl shadow-card p-3 active:scale-[0.98] transition-transform">
+                  <Link key={entry.id} to={`/recipe/${entry.recipeId}`} className="flex items-center gap-3 bg-white dark:bg-stone-800 rounded-2xl shadow-card p-3 active:scale-[0.98] transition-transform">
                     <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0 bg-warm-100 dark:bg-stone-700">
-                      {r.thumbnail_url
-                        ? <img src={r.thumbnail_url} alt={r.title} className="w-full h-full object-cover" />
+                      {entry.recipeThumbnail
+                        ? <img src={entry.recipeThumbnail} alt={entry.recipeTitle} className="w-full h-full object-cover" />
                         : <div className="w-full h-full flex items-center justify-center"><ChefHat size={16} className="text-warm-300" /></div>
                       }
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-900 dark:text-stone-50 truncate">{r.title}</p>
+                      <p className="text-sm font-semibold text-gray-900 dark:text-stone-50 truncate">{entry.recipeTitle}</p>
                       <p className="text-xs text-warm-400 dark:text-stone-500 mt-0.5">
-                        {entry.person === 'jacob' ? myName : partnerName} · {timeAgo(entry.date)}
+                        {name} · {timeAgo(entry.date)}
                       </p>
                     </div>
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${entry.person === 'jacob' ? 'bg-primary' : 'bg-sage'}`}>
-                      <span className="text-white text-[9px] font-bold">{(entry.person === 'jacob' ? myName : partnerName)[0]}</span>
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${isMe ? 'bg-primary' : 'bg-sage'}`}>
+                      <span className="text-white text-[9px] font-bold">{name[0]}</span>
                     </div>
                   </Link>
                 )
