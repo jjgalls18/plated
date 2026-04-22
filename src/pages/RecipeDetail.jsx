@@ -5,6 +5,7 @@ import {
   Minus, Plus, Trash2, Check, Share2, Play
 } from 'lucide-react'
 import { useRecipe, useLogMadeIt, useDeleteRecipe, useSimilarRecipes } from '../hooks/useRecipes'
+import { useGrocery } from '../hooks/useGrocery'
 import { useAppStore } from '../stores/useAppStore'
 import { useAuth } from '../hooks/useAuth'
 import toast from 'react-hot-toast'
@@ -15,8 +16,9 @@ export default function RecipeDetail() {
   const { data: recipe, isLoading } = useRecipe(id)
   const logMadeIt = useLogMadeIt()
   const deleteRecipe = useDeleteRecipe()
-  const { addGroceryItem, logCook, incrementGroceryListsGenerated } = useAppStore()
+  const { logCook, incrementGroceryListsGenerated } = useAppStore()
   const { profile } = useAuth()
+  const { addItems } = useGrocery()
 
   const similarRecipes = useSimilarRecipes(recipe)
 
@@ -48,10 +50,8 @@ export default function RecipeDetail() {
     }
   }
 
-  const handleAddToGrocery = () => {
-    recipe.ingredients?.forEach((ing) => {
-      addGroceryItem({ name: ing.name, amount: ing.amount, category: 'Recipe' })
-    })
+  const handleAddToGrocery = async () => {
+    await addItems(recipe.ingredients || [])
     incrementGroceryListsGenerated()
     toast.success(`${recipe.ingredients?.length || 0} items added to grocery list`)
   }

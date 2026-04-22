@@ -6,6 +6,7 @@ import {
   AlertTriangle, Eye, EyeOff, Check, Zap, Download, X,
 } from 'lucide-react'
 import { useAppStore, calculateAiCosts } from '../stores/useAppStore'
+import { useGrocery } from '../hooks/useGrocery'
 import { useRecipes } from '../hooks/useRecipes'
 import { isSupabaseConfigured } from '../lib/supabase'
 import { MOCK_RECIPES } from '../data/mockRecipes'
@@ -252,7 +253,7 @@ function HealthTab({ recipes, groceryListsGenerated }) {
   )
 }
 
-function ControlsTab({ recipes, aiEnabled, setAiEnabled, anthropicApiKey, setAnthropicApiKey, openaiApiKey, setOpenaiApiKey, qc, clearGroceryList, clearCookedDates }) {
+function ControlsTab({ recipes, aiEnabled, setAiEnabled, anthropicApiKey, setAnthropicApiKey, openaiApiKey, setOpenaiApiKey, qc, clearGroceryList, clearCookedDates, clearSharedGrocery }) {
   const [showKey, setShowKey] = useState(false)
   const [keyInput, setKeyInput] = useState(anthropicApiKey)
   const [showOpenAiKey, setShowOpenAiKey] = useState(false)
@@ -449,7 +450,7 @@ function ControlsTab({ recipes, aiEnabled, setAiEnabled, anthropicApiKey, setAnt
         <p className="text-xs font-semibold text-warm-400 dark:text-stone-500 uppercase tracking-wide mb-4">Cache & Data</p>
         <div className="space-y-3">
           <ActionRow icon={<RotateCcw size={15} />} label="Clear app cache" description="React Query + weather cache" color="text-blue-600 bg-blue-50 dark:bg-blue-900/30 dark:text-blue-400" onClick={handleClearCache} />
-          <ActionRow icon={<ShoppingCart size={15} />} label="Clear grocery list" description="Removes all items" color="text-sage bg-sage-50 dark:bg-sage-900/20" onClick={() => { if (window.confirm('Clear grocery list?')) { clearGroceryList(); toast.success('Grocery list cleared') } }} />
+          <ActionRow icon={<ShoppingCart size={15} />} label="Clear grocery list" description="Removes all shared items" color="text-sage bg-sage-50 dark:bg-sage-900/20" onClick={() => { if (window.confirm('Clear grocery list?')) { clearSharedGrocery(); clearGroceryList(); toast.success('Grocery list cleared') } }} />
           <ActionRow icon={<Flame size={15} />} label="Clear cooking log" description="Resets streak to 0" color="text-orange-600 bg-orange-50 dark:bg-orange-900/30 dark:text-orange-400" onClick={() => { if (window.confirm('Clear all cooked dates?')) { clearCookedDates(); toast.success('Cooking log cleared') } }} />
           {!isSupabaseConfigured && (
             <ActionRow icon={<Database size={15} />} label="Reset mock recipes" description="Restore 4 default recipes" color="text-warm-400 bg-warm-100 dark:bg-stone-700 dark:text-stone-400" onClick={() => { if (window.confirm('Reset recipes to defaults?')) { localStorage.setItem('plated-mock-recipes', JSON.stringify(MOCK_RECIPES)); qc.invalidateQueries({ queryKey: ['recipes'] }); toast.success('Recipes reset') } }} />
@@ -526,6 +527,7 @@ export default function AdminScreen() {
   } = useAppStore()
 
   const aiCosts = calculateAiCosts(aiCostLog)
+  const { clearAll: clearSharedGrocery } = useGrocery()
 
   return (
     <div className="min-h-screen bg-cream dark:bg-stone-900">
@@ -584,6 +586,7 @@ export default function AdminScreen() {
             qc={qc}
             clearGroceryList={clearGroceryList}
             clearCookedDates={clearCookedDates}
+            clearSharedGrocery={clearSharedGrocery}
           />
         )}
       </div>

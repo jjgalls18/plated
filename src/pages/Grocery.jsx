@@ -1,123 +1,47 @@
 import { useState } from 'react'
 import { ShoppingCart, Plus, Check, X, Share2 } from 'lucide-react'
-import { useAppStore } from '../stores/useAppStore'
+import { useGrocery } from '../hooks/useGrocery'
+import { usePartner } from '../hooks/usePartner'
+import { groupByCategory, getCategoryEmoji } from '../lib/grocery'
 import PageHeader from '../components/ui/PageHeader'
 import toast from 'react-hot-toast'
 
-// Smart category detection based on ingredient name keywords
-const CATEGORIES = [
-  {
-    name: 'Meat & Seafood',
-    emoji: '🥩',
-    keywords: ['chicken', 'beef', 'pork', 'salmon', 'fish', 'shrimp', 'turkey', 'lamb', 'bacon',
-      'sausage', 'steak', 'ground', 'breast', 'thigh', 'wing', 'rib', 'tuna', 'cod', 'tilapia',
-      'crab', 'lobster', 'scallop', 'anchovy', 'prosciutto', 'ham', 'pepperoni', 'chorizo'],
-  },
-  {
-    name: 'Produce',
-    emoji: '🥦',
-    keywords: ['onion', 'garlic', 'tomato', 'lettuce', 'spinach', 'pepper', 'broccoli', 'carrot',
-      'celery', 'cucumber', 'zucchini', 'mushroom', 'potato', 'sweet potato', 'kale', 'arugula',
-      'cabbage', 'corn', 'pea', 'bean', 'asparagus', 'eggplant', 'cauliflower', 'leek', 'shallot',
-      'ginger', 'herb', 'basil', 'cilantro', 'parsley', 'thyme', 'rosemary', 'mint', 'chive',
-      'scallion', 'green onion', 'jalapeño', 'avocado', 'lime', 'lemon', 'apple', 'banana',
-      'berry', 'strawberry', 'blueberry', 'raspberry', 'grape', 'mango', 'pineapple', 'peach',
-      'pear', 'orange', 'grapefruit', 'cherry', 'watermelon', 'melon'],
-  },
-  {
-    name: 'Dairy & Eggs',
-    emoji: '🧀',
-    keywords: ['milk', 'cheese', 'butter', 'cream', 'yogurt', 'egg', 'sour cream', 'parmesan',
-      'mozzarella', 'cheddar', 'ricotta', 'feta', 'brie', 'gouda', 'whipping cream', 'half and half',
-      'buttermilk', 'ghee', 'cream cheese'],
-  },
-  {
-    name: 'Bakery & Bread',
-    emoji: '🍞',
-    keywords: ['bread', 'roll', 'bun', 'baguette', 'tortilla', 'pita', 'naan', 'croissant',
-      'bagel', 'muffin', 'wrap'],
-  },
-  {
-    name: 'Pantry & Dry Goods',
-    emoji: '🫙',
-    keywords: ['flour', 'sugar', 'salt', 'pepper', 'oil', 'olive oil', 'vinegar', 'pasta', 'rice',
-      'quinoa', 'oat', 'cereal', 'lentil', 'chickpea', 'can', 'canned', 'sauce', 'tomato sauce',
-      'broth', 'stock', 'bouillon', 'honey', 'maple', 'syrup', 'jam', 'peanut butter', 'nut',
-      'almond', 'walnut', 'cashew', 'seed', 'breadcrumb', 'cornstarch', 'baking', 'yeast',
-      'cocoa', 'chocolate', 'vanilla', 'spice', 'cumin', 'paprika', 'turmeric', 'cinnamon',
-      'oregano', 'bay leaf', 'soy sauce', 'fish sauce', 'hot sauce', 'mustard', 'ketchup',
-      'mayonnaise', 'worcestershire', 'coconut milk', 'tahini', 'miso', 'noodle'],
-  },
-  {
-    name: 'Frozen',
-    emoji: '🧊',
-    keywords: ['frozen', 'ice cream', 'ice', 'edamame', 'frozen pea', 'frozen corn'],
-  },
-  {
-    name: 'Beverages',
-    emoji: '🥤',
-    keywords: ['juice', 'water', 'wine', 'beer', 'soda', 'coffee', 'tea', 'sparkling', 'drink'],
-  },
-]
-
-const OTHER_CATEGORY = { name: 'Other', emoji: '🛒' }
-
-export function detectCategory(itemName) {
-  const lower = itemName?.toLowerCase() || ''
-  for (const cat of CATEGORIES) {
-    if (cat.keywords.some((kw) => lower.includes(kw))) return cat.name
-  }
-  return OTHER_CATEGORY.name
-}
-
-function groupByCategory(items) {
-  const groups = {}
-  for (const item of items) {
-    const cat = item.category && item.category !== 'Recipe' ? item.category : detectCategory(item.name)
-    if (!groups[cat]) groups[cat] = []
-    groups[cat].push({ ...item, resolvedCategory: cat })
-  }
-  // Sort groups in a sensible store order
-  const order = CATEGORIES.map((c) => c.name).concat([OTHER_CATEGORY.name])
-  return order.filter((cat) => groups[cat]).map((cat) => ({ cat, items: groups[cat] }))
-}
-
-function getCategoryEmoji(catName) {
-  return CATEGORIES.find((c) => c.name === catName)?.emoji || OTHER_CATEGORY.emoji
-}
-
 export default function Grocery() {
-  const { groceryItems, addGroceryItem, toggleGroceryItem, removeGroceryItem, clearCheckedItems, clearGroceryList } = useAppStore()
+  const { items, isLoading, myId, addItem, toggleItem, removeItem, clearChecked, clearAll } = useGrocery()
+  const { partner } = usePartner()
   const [newItem, setNewItem] = useState('')
   const [showClearConfirm, setShowClearConfirm] = useState(false)
 
-  const unchecked = groceryItems.filter((i) => !i.checked)
-  const checked = groceryItems.filter((i) => i.checked)
+  const unchecked = items.filter((i) => !i.checked)
+  const checked = items.filter((i) => i.checked)
   const groups = groupByCategory(unchecked)
+
+  const partnerName = partner?.display_name || 'Partner'
+  const partnerInitial = partnerName[0]?.toUpperCase()
 
   const handleAdd = (e) => {
     e.preventDefault()
     const name = newItem.trim()
     if (!name) return
-    addGroceryItem({ name })
+    addItem({ name })
     setNewItem('')
   }
 
   const handleClearChecked = () => {
-    clearCheckedItems()
+    clearChecked()
     toast.success('Checked items removed')
   }
 
   const handleClearAll = () => {
-    clearGroceryList()
+    clearAll()
     setShowClearConfirm(false)
     toast.success('Grocery list cleared')
   }
 
   const handleShare = async () => {
-    const lines = groups.flatMap(({ cat, items }) => [
+    const lines = groups.flatMap(({ cat, items: catItems }) => [
       `${getCategoryEmoji(cat)} ${cat}`,
-      ...items.map((i) => `  • ${i.name}${i.amount ? ` (${i.amount})` : ''}`),
+      ...catItems.map((i) => `  • ${i.name}${i.amount ? ` (${i.amount})` : ''}`),
       '',
     ])
     if (checked.length > 0) {
@@ -147,16 +71,17 @@ export default function Grocery() {
           <div>
             <h1 className="font-display text-3xl font-bold text-gray-900 dark:text-stone-50">Grocery List</h1>
             <p className="text-sm text-warm-400 dark:text-stone-500 mt-0.5">
-              {unchecked.length} item{unchecked.length !== 1 ? 's' : ''} to get
+              {isLoading ? 'Loading…' : `${unchecked.length} item${unchecked.length !== 1 ? 's' : ''} to get`}
+              {partner && <span className="ml-1.5 text-primary font-medium">· shared with {partnerName}</span>}
             </p>
           </div>
           <div className="flex items-center gap-3">
-            {groceryItems.length > 0 && (
+            {items.length > 0 && (
               <button onClick={handleShare} className="p-2 text-warm-400 dark:text-stone-500 hover:text-primary transition-colors">
                 <Share2 size={18} />
               </button>
             )}
-            {groceryItems.length > 0 && (
+            {items.length > 0 && (
               <button
                 onClick={() => setShowClearConfirm(true)}
                 className="text-xs text-warm-400 dark:text-stone-500 hover:text-red-500 transition-colors font-medium"
@@ -185,7 +110,7 @@ export default function Grocery() {
         </form>
 
         {/* Empty state */}
-        {groceryItems.length === 0 && (
+        {!isLoading && items.length === 0 && (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <div className="w-16 h-16 rounded-3xl bg-warm-100 dark:bg-stone-800 flex items-center justify-center mb-4">
               <ShoppingCart size={28} className="text-warm-300 dark:text-stone-600" />
@@ -196,15 +121,22 @@ export default function Grocery() {
         )}
 
         {/* Grouped unchecked items */}
-        {groups.map(({ cat, items }) => (
+        {groups.map(({ cat, items: catItems }) => (
           <div key={cat} className="mb-5">
             <div className="flex items-center gap-2 mb-2">
               <span className="text-base">{getCategoryEmoji(cat)}</span>
               <p className="text-xs font-semibold text-warm-400 dark:text-stone-500 uppercase tracking-wide">{cat}</p>
             </div>
             <div className="space-y-2">
-              {items.map((item) => (
-                <GroceryItem key={item.id} item={item} onToggle={toggleGroceryItem} onRemove={removeGroceryItem} />
+              {catItems.map((item) => (
+                <GroceryItem
+                  key={item.id}
+                  item={item}
+                  myId={myId}
+                  partnerInitial={partnerInitial}
+                  onToggle={() => toggleItem(item.id, item.checked)}
+                  onRemove={() => removeItem(item.id)}
+                />
               ))}
             </div>
           </div>
@@ -226,7 +158,14 @@ export default function Grocery() {
             </div>
             <div className="space-y-2 opacity-60">
               {checked.map((item) => (
-                <GroceryItem key={item.id} item={item} onToggle={toggleGroceryItem} onRemove={removeGroceryItem} />
+                <GroceryItem
+                  key={item.id}
+                  item={item}
+                  myId={myId}
+                  partnerInitial={partnerInitial}
+                  onToggle={() => toggleItem(item.id, item.checked)}
+                  onRemove={() => removeItem(item.id)}
+                />
               ))}
             </div>
           </div>
@@ -238,7 +177,7 @@ export default function Grocery() {
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 pb-10 px-5">
           <div className="w-full max-w-sm bg-white dark:bg-stone-800 rounded-3xl p-6 shadow-xl">
             <h3 className="font-semibold text-gray-900 dark:text-stone-50 text-lg mb-2">Clear everything?</h3>
-            <p className="text-sm text-warm-400 dark:text-stone-400 mb-5">This will remove all items from your grocery list.</p>
+            <p className="text-sm text-warm-400 dark:text-stone-400 mb-5">This will remove all items from your shared grocery list.</p>
             <div className="flex gap-3">
               <button onClick={() => setShowClearConfirm(false)} className="flex-1 py-3 rounded-2xl bg-warm-100 dark:bg-stone-700 text-sm font-semibold text-gray-700 dark:text-stone-200">
                 Cancel
@@ -254,11 +193,13 @@ export default function Grocery() {
   )
 }
 
-function GroceryItem({ item, onToggle, onRemove }) {
+function GroceryItem({ item, myId, partnerInitial, onToggle, onRemove }) {
+  const addedByPartner = myId && item.user_id && item.user_id !== myId
+
   return (
     <div className="flex items-center gap-3 bg-white dark:bg-stone-800 rounded-2xl px-4 py-3.5 shadow-card">
       <button
-        onClick={() => onToggle(item.id)}
+        onClick={onToggle}
         className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all active:scale-90 ${
           item.checked ? 'bg-primary border-primary' : 'border-warm-300 dark:border-stone-600'
         }`}
@@ -275,8 +216,15 @@ function GroceryItem({ item, onToggle, onRemove }) {
         )}
       </div>
 
+      {/* Partner badge */}
+      {addedByPartner && partnerInitial && (
+        <div className="w-5 h-5 rounded-full bg-sage flex items-center justify-center flex-shrink-0">
+          <span className="text-white text-[9px] font-bold">{partnerInitial}</span>
+        </div>
+      )}
+
       <button
-        onClick={() => onRemove(item.id)}
+        onClick={onRemove}
         className="p-1.5 text-warm-300 dark:text-stone-600 hover:text-red-400 transition-colors active:scale-90"
       >
         <X size={15} />

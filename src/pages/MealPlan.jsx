@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, X, ChefHat, ShoppingCart, Search } from 'luc
 import { Link } from 'react-router-dom'
 import { useAppStore } from '../stores/useAppStore'
 import { useRecipes } from '../hooks/useRecipes'
+import { useGrocery } from '../hooks/useGrocery'
 import PageHeader from '../components/ui/PageHeader'
 import toast from 'react-hot-toast'
 
@@ -33,27 +34,23 @@ function formatMonthRange(dates) {
 export default function MealPlan() {
   const [weekOffset, setWeekOffset] = useState(0)
   const [pickerDate, setPickerDate] = useState(null)
-  const { mealPlan, setMealPlan, removeMealPlan, addGroceryItem, incrementGroceryListsGenerated } = useAppStore()
+  const { mealPlan, setMealPlan, removeMealPlan, incrementGroceryListsGenerated } = useAppStore()
   const { data: recipes = [] } = useRecipes()
+  const { addItems } = useGrocery()
 
   const weekDates = getWeekDates(weekOffset)
   const today = new Date().toISOString().split('T')[0]
 
   const getRecipe = (id) => recipes.find((r) => r.id === id)
 
-  const handleAddToGrocery = () => {
+  const handleAddToGrocery = async () => {
     const planned = weekDates.filter((d) => mealPlan[d])
     if (planned.length === 0) return toast('No meals planned this week')
-    let count = 0
-    planned.forEach((d) => {
-      const recipe = getRecipe(mealPlan[d])
-      recipe?.ingredients?.forEach((ing) => {
-        addGroceryItem({ name: ing.name, amount: ing.amount })
-        count++
-      })
-    })
+    const allIngredients = planned.flatMap((d) => getRecipe(mealPlan[d])?.ingredients || [])
+    if (!allIngredients.length) return toast('No ingredients found')
+    await addItems(allIngredients)
     incrementGroceryListsGenerated()
-    toast.success(`${count} ingredients added to grocery list`)
+    toast.success(`${allIngredients.length} ingredients added to grocery list`)
   }
 
   return (
@@ -177,11 +174,11 @@ export default function MealPlan() {
         <RecipePicker
           date={pickerDate}
           recipes={recipes}
-          onSelect={(recipeId) => {
+          onSelect={async (recipeId) => {
             setMealPlan(pickerDate, recipeId)
             const recipe = getRecipe(recipeId)
             if (recipe?.ingredients?.length) {
-              recipe.ingredients.forEach((ing) => addGroceryItem({ name: ing.name, amount: ing.amount }))
+              await addItems(recipe.ingredients)
               incrementGroceryListsGenerated()
               toast.success(`Meal planned + ${recipe.ingredients.length} ingredients added to grocery list`)
             } else {
