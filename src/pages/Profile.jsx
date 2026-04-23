@@ -3,6 +3,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useAppStore, calculateStreak } from '../stores/useAppStore'
 import { useRecipes } from '../hooks/useRecipes'
 import { usePartner } from '../hooks/usePartner'
+import { useGrocery } from '../hooks/useGrocery'
 import { isSupabaseConfigured } from '../lib/supabase'
 import toast from 'react-hot-toast'
 import {
@@ -15,7 +16,8 @@ import PageHeader from '../components/ui/PageHeader'
 export default function Profile() {
   const { signOut } = useAuth()
   const { data: recipes = [] } = useRecipes()
-  const { groceryItems, toggleGroceryItem, clearCheckedItems, cookedDates, darkMode, setDarkMode } = useAppStore()
+  const { cookedDates, darkMode, setDarkMode } = useAppStore()
+  const { items: groceryItems, toggleItem, clearChecked } = useGrocery()
   const { inviteCode, partner, joinWithCode, unlinkPartner } = usePartner()
   const [activeTab, setActiveTab] = useState('overview')
   const [joinCode, setJoinCode] = useState('')
@@ -24,6 +26,7 @@ export default function Profile() {
   const totalCooked = recipes.reduce((sum, r) => sum + (r.made_count || 0), 0)
   const avgRating = recipes.filter((r) => r.rating).reduce((sum, r, _, arr) => sum + r.rating / arr.length, 0)
   const checkedCount = groceryItems.filter((i) => i.checked).length
+
   const streak = calculateStreak(cookedDates)
 
   const handleSignOut = async () => {
@@ -221,7 +224,7 @@ export default function Profile() {
               </div>
               {checkedCount > 0 && (
                 <button
-                  onClick={clearCheckedItems}
+                  onClick={clearChecked}
                   className="text-xs text-warm-400 dark:text-stone-500 font-semibold"
                 >
                   Clear {checkedCount} checked
@@ -241,7 +244,7 @@ export default function Profile() {
                 {groceryItems.map((item) => (
                   <button
                     key={item.id}
-                    onClick={() => toggleGroceryItem(item.id)}
+                    onClick={() => toggleItem(item.id, item.checked)}
                     className="w-full flex items-center gap-3 py-2.5 text-left"
                   >
                     <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${

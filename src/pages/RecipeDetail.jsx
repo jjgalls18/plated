@@ -51,9 +51,14 @@ export default function RecipeDetail() {
   }
 
   const handleAddToGrocery = async () => {
-    await addItems(recipe.ingredients || [])
+    const scaled = (recipe.ingredients || []).map((ing) => ({
+      ...ing,
+      amount: scaleAmount(ing.amount) || ing.amount,
+    }))
+    await addItems(scaled)
     incrementGroceryListsGenerated()
-    toast.success(`${recipe.ingredients?.length || 0} items added to grocery list`)
+    const scaleLabel = servingScale !== 1 ? ` (×${servingScale})` : ''
+    toast.success(`${scaled.length} items added to grocery list${scaleLabel}`)
   }
 
   const handleShare = async () => {
