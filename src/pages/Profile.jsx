@@ -11,12 +11,12 @@ import toast from 'react-hot-toast'
 import {
   ChefHat, Flame, Star, ShoppingCart,
   LogOut, Check, ShoppingBag, Sun, Moon,
-  Copy, UserPlus, Link2, Link2Off, RotateCcw
+  Copy, UserPlus, Link2, Link2Off, RotateCcw, X
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 
 export default function Profile() {
-  const { signOut } = useAuth()
+  const { signOut, profile, updateProfile } = useAuth()
   const { data: recipes = [] } = useRecipes()
   const { cookedDates, darkMode, setDarkMode } = useAppStore()
   const { items: groceryItems, toggleItem, clearChecked } = useGrocery()
@@ -25,6 +25,8 @@ export default function Profile() {
   const [activeTab, setActiveTab] = useState('overview')
   const [joinCode, setJoinCode] = useState('')
   const [joining, setJoining] = useState(false)
+  const [nameInput, setNameInput] = useState('')
+  const [editingName, setEditingName] = useState(false)
 
   const totalCooked = recipes.reduce((sum, r) => sum + (r.made_count || 0), 0)
   const avgRating = recipes.filter((r) => r.rating).reduce((sum, r, _, arr) => sum + r.rating / arr.length, 0)
@@ -259,6 +261,62 @@ export default function Profile() {
               <p className="text-amber-700 dark:text-amber-400 text-xs leading-relaxed">
                 Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your .env file to sync recipes between devices and with your partner.
               </p>
+            </div>
+          )}
+
+          {/* Display name */}
+          {isSupabaseConfigured && (
+            <div className="bg-white dark:bg-stone-800 rounded-2xl shadow-card p-5">
+              <p className="font-semibold text-gray-900 dark:text-stone-50 text-sm mb-3">Your Name</p>
+              {editingName ? (
+                <div className="flex gap-2">
+                  <input
+                    autoFocus
+                    type="text"
+                    value={nameInput}
+                    onChange={(e) => setNameInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') setEditingName(false)
+                    }}
+                    placeholder="Display name"
+                    className="flex-1 px-4 py-2.5 bg-warm-50 dark:bg-stone-700 rounded-xl text-sm font-medium text-gray-900 dark:text-stone-50 placeholder-warm-400 dark:placeholder-stone-500 outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                  <button
+                    onClick={async () => {
+                      const name = nameInput.trim()
+                      if (!name) return
+                      try {
+                        await updateProfile({ display_name: name })
+                        setEditingName(false)
+                        toast.success('Name updated!')
+                      } catch {
+                        toast.error('Could not update name')
+                      }
+                    }}
+                    className="px-4 py-2.5 bg-primary rounded-xl text-sm font-semibold text-white active:scale-95 transition-transform"
+                  >
+                    Save
+                  </button>
+                  <button
+                    onClick={() => setEditingName(false)}
+                    className="px-3 py-2.5 bg-warm-100 dark:bg-stone-700 rounded-xl text-sm font-semibold text-gray-600 dark:text-stone-300"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between">
+                  <p className="text-warm-400 dark:text-stone-500 text-sm">
+                    {profile?.display_name || <span className="italic">Not set</span>}
+                  </p>
+                  <button
+                    onClick={() => { setNameInput(profile?.display_name || ''); setEditingName(true) }}
+                    className="text-xs font-semibold text-primary active:scale-95 transition-transform"
+                  >
+                    Edit
+                  </button>
+                </div>
+              )}
             </div>
           )}
 

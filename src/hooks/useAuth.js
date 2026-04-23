@@ -60,5 +60,12 @@ export function useAuth() {
     await supabase.auth.signOut()
   }
 
-  return { user, profile, loading, signIn, signUp, signOut }
+  const updateProfile = async (fields) => {
+    if (!user) return
+    const { error } = await supabase.from('profiles').update(fields).eq('id', user.id)
+    if (error) throw error
+    setProfile((prev) => ({ ...prev, ...fields }))
+  }
+
+  return { user, profile, loading, signIn, signUp, signOut, updateProfile }
 }
