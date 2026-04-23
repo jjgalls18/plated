@@ -66,10 +66,19 @@ export const useAppStore = create(
         }
       }),
 
-      // Meal plan — { 'YYYY-MM-DD': recipeId }
+      // Meal plan — { 'YYYY-MM-DD': { breakfast?: recipeId, lunch?: recipeId, dinner?: recipeId } }
       mealPlan: {},
-      setMealPlan: (date, recipeId) => set((s) => ({ mealPlan: { ...s.mealPlan, [date]: recipeId } })),
-      removeMealPlan: (date) => set((s) => { const p = { ...s.mealPlan }; delete p[date]; return { mealPlan: p } }),
+      setMealPlan: (date, slot, recipeId) => set((s) => ({
+        mealPlan: { ...s.mealPlan, [date]: { ...s.mealPlan[date], [slot]: recipeId } },
+      })),
+      removeMealPlan: (date, slot) => set((s) => {
+        const day = { ...(s.mealPlan[date] || {}) }
+        delete day[slot]
+        const p = { ...s.mealPlan }
+        if (Object.keys(day).length === 0) delete p[date]
+        else p[date] = day
+        return { mealPlan: p }
+      }),
 
       // Grocery list (local cache)
       groceryItems: [],
