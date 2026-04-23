@@ -173,6 +173,23 @@ export function useGrocery() {
     onSuccess: () => qc.invalidateQueries({ queryKey: QUERY_KEY }),
   })
 
+  const updateItemMutation = useMutation({
+    mutationFn: async ({ id, fields }) => {
+      const { error } = await supabase.from('grocery_items').update(fields).eq('id', id)
+      if (error) throw error
+    },
+    onMutate: async ({ id, fields }) => {
+      await qc.cancelQueries({ queryKey: QUERY_KEY })
+      const prev = qc.getQueryData([...QUERY_KEY, user?.id])
+      qc.setQueryData([...QUERY_KEY, user?.id], (old) =>
+        old?.map((i) => i.id === id ? { ...i, ...fields } : i)
+      )
+      return { prev }
+    },
+    onError: (_, __, ctx) => qc.setQueryData([...QUERY_KEY, user?.id], ctx.prev),
+    onSettled: () => qc.invalidateQueries({ queryKey: QUERY_KEY }),
+  })
+
   // ─── Non-Supabase fallback ───────────────────────────────────────────────────
   if (!isSupabaseConfigured) {
     return {
@@ -183,6 +200,7 @@ export function useGrocery() {
       addItems: (items) => items.forEach((item) => localAdd(item)),
       toggleItem: (id, checked) => localToggle(id),
       removeItem: (id) => localRemove(id),
+      updateItem: () => {},
       clearChecked: () => localClearChecked(),
       clearAll: () => localClearAll(),
     }
@@ -197,6 +215,7 @@ export function useGrocery() {
     addItems: (items) => addItemsMutation.mutateAsync(items),
     toggleItem: (id, checked) => toggleMutation.mutate({ id, checked }),
     removeItem: (id) => removeMutation.mutate(id),
+    updateItem: (id, fields) => updateItemMutation.mutate({ id, fields }),
     clearChecked: () => clearCheckedMutation.mutate(),
     clearAll: () => clearAllMutation.mutate(),
   }

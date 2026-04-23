@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { ShoppingCart, Plus, Check, X, Share2 } from 'lucide-react'
+import { useState, useRef } from 'react'
+import { ShoppingCart, Plus, Check, X, Share2, Pencil } from 'lucide-react'
 import { useGrocery } from '../hooks/useGrocery'
 import { usePartner } from '../hooks/usePartner'
 import { groupByCategory, getCategoryEmoji } from '../lib/grocery'
@@ -7,7 +7,7 @@ import PageHeader from '../components/ui/PageHeader'
 import toast from 'react-hot-toast'
 
 export default function Grocery() {
-  const { items, isLoading, myId, addItem, toggleItem, removeItem, clearChecked, clearAll } = useGrocery()
+  const { items, isLoading, myId, addItem, toggleItem, removeItem, updateItem, clearChecked, clearAll } = useGrocery()
   const { partner } = usePartner()
   const [newItem, setNewItem] = useState('')
   const [showClearConfirm, setShowClearConfirm] = useState(false)
@@ -136,6 +136,7 @@ export default function Grocery() {
                   partnerInitial={partnerInitial}
                   onToggle={() => toggleItem(item.id, item.checked)}
                   onRemove={() => removeItem(item.id)}
+                  onUpdate={(fields) => updateItem(item.id, fields)}
                 />
               ))}
             </div>
@@ -165,6 +166,7 @@ export default function Grocery() {
                   partnerInitial={partnerInitial}
                   onToggle={() => toggleItem(item.id, item.checked)}
                   onRemove={() => removeItem(item.id)}
+                  onUpdate={(fields) => updateItem(item.id, fields)}
                 />
               ))}
             </div>
@@ -193,8 +195,31 @@ export default function Grocery() {
   )
 }
 
-function GroceryItem({ item, myId, partnerInitial, onToggle, onRemove }) {
+function GroceryItem({ item, myId, partnerInitial, onToggle, onRemove, onUpdate }) {
   const addedByPartner = myId && item.user_id && item.user_id !== myId
+  const [editingAmount, setEditingAmount] = useState(false)
+  const [draft, setDraft] = useState('')
+  const inputRef = useRef(null)
+
+  const startEdit = (e) => {
+    e.stopPropagation()
+    setDraft(item.amount || '')
+    setEditingAmount(true)
+    // focus happens via autoFocus on input
+  }
+
+  const saveEdit = () => {
+    const trimmed = draft.trim()
+    if (trimmed !== (item.amount || '')) {
+      onUpdate({ amount: trimmed || null })
+    }
+    setEditingAmount(false)
+  }
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); saveEdit() }
+    if (e.key === 'Escape') setEditingAmount(false)
+  }
 
   return (
     <div className="flex items-center gap-3 bg-white dark:bg-stone-800 rounded-2xl px-4 py-3.5 shadow-card">
@@ -211,8 +236,32 @@ function GroceryItem({ item, myId, partnerInitial, onToggle, onRemove }) {
         <p className={`text-sm font-medium text-gray-900 dark:text-stone-50 truncate ${item.checked ? 'line-through text-warm-400 dark:text-stone-500' : ''}`}>
           {item.name}
         </p>
-        {item.amount && (
-          <p className="text-xs text-warm-400 dark:text-stone-500 mt-0.5">{item.amount}</p>
+
+        {/* Amount — tappable to edit */}
+        {editingAmount ? (
+          <input
+            ref={inputRef}
+            autoFocus
+            type="text"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={saveEdit}
+            onKeyDown={handleKeyDown}
+            placeholder="e.g. 2 cups"
+            className="mt-0.5 text-xs px-2 py-0.5 rounded-lg bg-warm-100 dark:bg-stone-700 text-gray-900 dark:text-stone-50 placeholder-warm-300 dark:placeholder-stone-600 outline-none w-28 focus:ring-1 focus:ring-primary/40"
+          />
+        ) : (
+          <button
+            onClick={startEdit}
+            className="flex items-center gap-1 mt-0.5 group"
+          >
+            <span className={`text-xs ${item.amount ? 'text-warm-400 dark:text-stone-500' : 'text-warm-300 dark:text-stone-600 opacity-0 group-hover:opacity-100'}`}>
+              {item.amount || '+ qty'}
+            </span>
+            {item.amount && (
+              <Pencil size={9} className="text-warm-300 dark:text-stone-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+            )}
+          </button>
         )}
       </div>
 
