@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   Flame, Sun, Moon, ChefHat, Trophy, Shuffle,
@@ -268,6 +268,72 @@ function LastCookedCard({ entry, myId, myName = 'You', partnerName = 'Partner' }
   )
 }
 
+function DayFavoritesCard({ entries, recipes, myName, partnerName, myId }) {
+  const dayName = new Date().toLocaleDateString('en-US', { weekday: 'long' })
+
+  const favorites = useMemo(() => {
+    const dayEntries = entries.filter((e) => {
+      const d = new Date(e.date + 'T12:00:00')
+      return d.toLocaleDateString('en-US', { weekday: 'long' }) === dayName
+    })
+    if (dayEntries.length < 2) return []
+
+    const counts = {}
+    dayEntries.forEach((e) => {
+      if (!e.recipeId) return
+      if (!counts[e.recipeId]) counts[e.recipeId] = { total: 0, mine: 0, partner: 0 }
+      counts[e.recipeId].total++
+      if (e.userId === myId) counts[e.recipeId].mine++
+      else counts[e.recipeId].partner++
+    })
+
+    return Object.entries(counts)
+      .sort((a, b) => b[1].total - a[1].total)
+      .slice(0, 3)
+      .map(([recipeId, data]) => ({
+        recipe: recipes.find((r) => r.id === recipeId),
+        ...data,
+      }))
+      .filter((f) => f.recipe && f.total >= 2)
+  }, [entries, recipes, dayName, myId])
+
+  if (favorites.length === 0) return null
+
+  return (
+    <div className="bg-white dark:bg-stone-800 rounded-3xl shadow-card p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-lg">📅</span>
+        <div>
+          <p className="font-semibold text-gray-900 dark:text-stone-50 text-sm">{dayName} favorites</p>
+          <p className="text-xs text-warm-400 dark:text-stone-500">What you love cooking on {dayName}s</p>
+        </div>
+      </div>
+      <div className="space-y-3">
+        {favorites.map(({ recipe, total, mine, partner }, i) => (
+          <Link key={recipe.id} to={`/recipe/${recipe.id}`} className="flex items-center gap-3 active:scale-[0.98] transition-transform">
+            <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 font-bold text-sm"
+              style={{ background: i === 0 ? '#C4622D' : i === 1 ? '#C0A87B' : '#9CA3AF', color: 'white' }}>
+              {i + 1}
+            </div>
+            <div className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0 bg-warm-100 dark:bg-stone-700">
+              {recipe.thumbnail_url
+                ? <img src={recipe.thumbnail_url} alt={recipe.title} className="w-full h-full object-cover" />
+                : <div className="w-full h-full flex items-center justify-center"><ChefHat size={16} className="text-warm-300" /></div>
+              }
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-gray-900 dark:text-stone-50 truncate">{recipe.title}</p>
+              <p className="text-xs text-warm-400 dark:text-stone-500 mt-0.5">
+                Cooked {total}× · {[mine > 0 && myName, partner > 0 && partnerName].filter(Boolean).join(' & ')}
+              </p>
+            </div>
+          </Link>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function TonightCard({ recipe, navigate }) {
   if (!recipe) {
     return (
@@ -497,6 +563,8 @@ export default function Home() {
         {lastEntry && (
           <LastCookedCard entry={lastEntry} myId={myId} myName={myName} partnerName={partnerName} />
         )}
+
+        <DayFavoritesCard entries={entries} recipes={recipes} myName={myName} partnerName={partnerName} myId={myId} />
 
         <TonightCard recipe={tonightRecipe} navigate={navigate} />
 

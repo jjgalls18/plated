@@ -1,9 +1,11 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useAppStore, calculateStreak } from '../stores/useAppStore'
 import { useRecipes } from '../hooks/useRecipes'
 import { usePartner } from '../hooks/usePartner'
 import { useGrocery } from '../hooks/useGrocery'
+import { useCookLog } from '../hooks/useCookLog'
 import { isSupabaseConfigured } from '../lib/supabase'
 import toast from 'react-hot-toast'
 import {
@@ -19,6 +21,7 @@ export default function Profile() {
   const { cookedDates, darkMode, setDarkMode } = useAppStore()
   const { items: groceryItems, toggleItem, clearChecked } = useGrocery()
   const { inviteCode, partner, joinWithCode, unlinkPartner } = usePartner()
+  const { entries } = useCookLog()
   const [activeTab, setActiveTab] = useState('overview')
   const [joinCode, setJoinCode] = useState('')
   const [joining, setJoining] = useState(false)
@@ -178,30 +181,11 @@ export default function Profile() {
             </div>
           )}
 
-          {/* Our Cookbook */}
-          <div className="bg-white dark:bg-stone-800 rounded-2xl shadow-card p-5">
-            <h3 className="font-semibold text-gray-900 dark:text-stone-50 mb-3">Our Cookbook</h3>
-            {recipes.filter((r) => r.made_count > 0).length === 0 ? (
-              <p className="text-warm-400 dark:text-stone-500 text-sm text-center py-4">
-                Recipes you've cooked will appear here.
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {recipes
-                  .filter((r) => r.made_count > 0)
-                  .sort((a, b) => b.made_count - a.made_count)
-                  .slice(0, 5)
-                  .map((recipe) => (
-                    <div key={recipe.id} className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-primary-50 dark:bg-primary/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                        <span className="text-primary text-xs font-bold">{recipe.made_count}×</span>
-                      </div>
-                      <p className="text-sm font-medium text-gray-900 dark:text-stone-100 flex-1 line-clamp-1">{recipe.title}</p>
-                    </div>
-                  ))}
-              </div>
-            )}
-          </div>
+          {/* Most Cooked */}
+          <MostCookedCard entries={entries} recipes={recipes} />
+
+          {/* Day patterns */}
+          <DayPatternsCard entries={entries} recipes={recipes} />
 
           {/* Sign out */}
           <button
@@ -326,6 +310,111 @@ export default function Profile() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function MostCookedCard({ entries, recipes }) {
+  const ranked = (() => {
+    const counts = {}
+    entries.forEach((e) => {
+      if (!e.recipeId) return
+      counts[e.recipeId] = (counts[e.recipeId] || 0) + 1
+    })
+    return Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([id, count]) => ({ recipe: recipes.find((r) => r.id === id), count }))
+      .filter((r) => r.recipe)
+  })()
+
+  const MEDALS = ['🥇', '🥈', '🥉']
+
+  return (
+    <div className="bg-white dark:bg-stone-800 rounded-2xl shadow-card p-5">
+      <h3 className="font-semibold text-gray-900 dark:text-stone-50 mb-4">Most cooked</h3>
+      {ranked.length === 0 ? (
+        <p className="text-warm-400 dark:text-stone-500 text-sm text-center py-4">
+          Log your first cook to start tracking.
+        </p>
+      ) : (
+        <div className="space-y-3">
+          {ranked.map(({ recipe, count }, i) => (
+            <Link key={recipe.id} to={`/recipe/${recipe.id}`} className="flex items-center gap-3 active:scale-[0.98] transition-transform">
+              <span className="text-lg w-7 text-center flex-shrink-0">{MEDALS[i] || `${i + 1}`}</span>
+              <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0 bg-warm-100 dark:bg-stone-700">
+                {recipe.thumbnail_url
+                  ? <img src={recipe.thumbnail_url} alt={recipe.title} className="w-full h-full object-cover" />
+                  : <div className="w-full h-full flex items-center justify-center"><ChefHat size={14} className="text-warm-300" /></div>
+                }
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-900 dark:text-stone-100 truncate">{recipe.title}</p>
+                {recipe.rating && <p className="text-xs text-amber-400 mt-0.5">{'★'.repeat(recipe.rating)}</p>}
+              </div>
+              <span className="text-sm font-bold text-primary flex-shrink-0">{count}×</span>
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function DayPatternsCard({ entries, recipes }) {
+  const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+  const today = new Date().getDay()
+
+  const patterns = DAYS.map((day, dayIndex) => {
+    const dayEntries = entries.filter((e) => {
+      const d = new Date(e.date + 'T12:00:00')
+      return d.getDay() === dayIndex
+    })
+    if (dayEntries.length < 2) return { day, recipe: null, count: 0 }
+
+    const counts = {}
+    dayEntries.forEach((e) => {
+      if (e.recipeId) counts[e.recipeId] = (counts[e.recipeId] || 0) + 1
+    })
+    const topId = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0]
+    return {
+      day,
+      recipe: recipes.find((r) => r.id === topId) || null,
+      count: counts[topId] || 0,
+    }
+  }).filter((p) => p.recipe && p.count >= 2)
+
+  if (patterns.length === 0) return null
+
+  return (
+    <div className="bg-white dark:bg-stone-800 rounded-2xl shadow-card p-5">
+      <h3 className="font-semibold text-gray-900 dark:text-stone-50 mb-1">Day patterns</h3>
+      <p className="text-xs text-warm-400 dark:text-stone-500 mb-4">What you tend to cook each day</p>
+      <div className="space-y-3">
+        {patterns.map(({ day, recipe, count }) => {
+          const isToday = day === DAYS[today]
+          return (
+            <Link key={day} to={`/recipe/${recipe.id}`} className={`flex items-center gap-3 active:scale-[0.98] transition-transform ${isToday ? 'opacity-100' : 'opacity-75'}`}>
+              <div className={`w-14 text-center flex-shrink-0`}>
+                <p className={`text-[10px] font-bold uppercase tracking-wide ${isToday ? 'text-primary' : 'text-warm-400 dark:text-stone-500'}`}>
+                  {day.slice(0, 3)}
+                  {isToday && ' ·now'}
+                </p>
+              </div>
+              <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0 bg-warm-100 dark:bg-stone-700">
+                {recipe.thumbnail_url
+                  ? <img src={recipe.thumbnail_url} alt={recipe.title} className="w-full h-full object-cover" />
+                  : <div className="w-full h-full flex items-center justify-center"><ChefHat size={14} className="text-warm-300" /></div>
+                }
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-900 dark:text-stone-100 truncate">{recipe.title}</p>
+                <p className="text-xs text-warm-400 dark:text-stone-500 mt-0.5">{count}× on {day}s</p>
+              </div>
+            </Link>
+          )
+        })}
+      </div>
     </div>
   )
 }
