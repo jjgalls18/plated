@@ -4,6 +4,7 @@ import { ArrowLeft, Link as LinkIcon, PenLine, Camera, Plus, X, ChevronRight, Lo
 import { useAddRecipe, useRecipes } from '../hooks/useRecipes'
 import { useAppStore } from '../stores/useAppStore'
 import { extractFromVideo, extractFromWeb, isVideoUrl } from '../lib/extraction'
+import ThumbnailPicker from '../components/ui/ThumbnailPicker'
 import toast from 'react-hot-toast'
 
 const MODES = [
@@ -338,6 +339,12 @@ function ReviewScreen({ extracted, onChange, onSave, onBack, saving }) {
       <div className="px-5 space-y-4">
         {/* Confidence banner */}
         <ConfidenceBanner confidence={extracted.confidence ?? 1} />
+
+        {/* Thumbnail */}
+        <ThumbnailPicker
+          url={extracted.thumbnail_url || null}
+          onChange={(url) => onChange({ ...extracted, thumbnail_url: url })}
+        />
 
         {/* Title */}
         <div className="bg-white dark:bg-stone-800 rounded-2xl shadow-card p-4">

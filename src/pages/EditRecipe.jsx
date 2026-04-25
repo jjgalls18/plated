@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Plus, X, GripVertical } from 'lucide-react'
 import { useRecipe, useUpdateRecipe } from '../hooks/useRecipes'
+import ThumbnailPicker from '../components/ui/ThumbnailPicker'
 import toast from 'react-hot-toast'
 
 export default function EditRecipe() {
@@ -20,6 +21,7 @@ function EditForm({ recipe, navigate, updateRecipe }) {
   const [form, setForm] = useState({
     title: recipe.title || '',
     description: recipe.description || '',
+    thumbnail_url: recipe.thumbnail_url || null,
     prep_time: recipe.prep_time ?? '',
     cook_time: recipe.cook_time ?? '',
     servings: recipe.servings ?? '',
@@ -82,6 +84,7 @@ function EditForm({ recipe, navigate, updateRecipe }) {
         prep_time: form.prep_time !== '' ? parseInt(form.prep_time) || null : null,
         cook_time: form.cook_time !== '' ? parseInt(form.cook_time) || null : null,
         servings: form.servings !== '' ? parseInt(form.servings) || null : null,
+        thumbnail_url: form.thumbnail_url,
         tags: form.tags,
         ingredients: form.ingredients,
         steps: form.steps,
@@ -117,6 +120,12 @@ function EditForm({ recipe, navigate, updateRecipe }) {
       </div>
 
       <div className="px-5 space-y-4">
+        {/* Thumbnail */}
+        <ThumbnailPicker
+          url={form.thumbnail_url}
+          onChange={(url) => set('thumbnail_url', url)}
+        />
+
         {/* Title */}
         <div className="bg-white dark:bg-stone-800 rounded-2xl shadow-card p-4">
           <label className="text-xs font-semibold text-warm-400 dark:text-stone-500 uppercase tracking-wide block mb-2">Title</label>
