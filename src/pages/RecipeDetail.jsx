@@ -2,13 +2,49 @@ import { useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
   ArrowLeft, Clock, Users, Star, ChefHat, ShoppingCart,
-  Minus, Plus, Trash2, Check, Share2, Play, Pencil
+  Minus, Plus, Trash2, Check, Share2, Play, Pencil,
+  Globe, ExternalLink
 } from 'lucide-react'
 import { useRecipe, useLogMadeIt, useDeleteRecipe, useSimilarRecipes } from '../hooks/useRecipes'
 import { useGrocery } from '../hooks/useGrocery'
 import { useAppStore } from '../stores/useAppStore'
 import { useAuth } from '../hooks/useAuth'
 import toast from 'react-hot-toast'
+
+function PlatformIcon({ size = 15, platform }) {
+  if (platform === 'tiktok') return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V9.05a8.16 8.16 0 004.77 1.52V7.13a4.85 4.85 0 01-1-.44z" />
+    </svg>
+  )
+  if (platform === 'instagram') return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z" />
+    </svg>
+  )
+  if (platform === 'youtube') return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+    </svg>
+  )
+  return <Globe size={size} />
+}
+
+function getSourceInfo(url) {
+  try {
+    const host = new URL(url).hostname.toLowerCase()
+    if (host.includes('tiktok'))
+      return { label: 'Watch on TikTok',   platform: 'tiktok',    style: 'bg-black text-white' }
+    if (host.includes('instagram'))
+      return { label: 'View on Instagram', platform: 'instagram', style: 'bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 text-white' }
+    if (host.includes('youtube') || host.includes('youtu.be'))
+      return { label: 'Watch on YouTube',  platform: 'youtube',   style: 'bg-red-600 text-white' }
+    const hostname = host.replace('www.', '')
+    return { label: `View on ${hostname}`, platform: 'globe',     style: 'bg-white dark:bg-stone-700 text-gray-800 dark:text-stone-100' }
+  } catch {
+    return { label: 'View original source', platform: 'globe',    style: 'bg-white dark:bg-stone-700 text-gray-800 dark:text-stone-100' }
+  }
+}
 
 export default function RecipeDetail() {
   const { id } = useParams()
@@ -136,6 +172,22 @@ export default function RecipeDetail() {
             <Trash2 size={15} className="text-rose-500" />
           </button>
         </div>
+
+        {/* Source pill on hero */}
+        {recipe.source_url && (() => {
+          const { label, platform, style } = getSourceInfo(recipe.source_url)
+          return (
+            <a
+              href={recipe.source_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`absolute bottom-5 left-1/2 -translate-x-1/2 flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold shadow-lg active:scale-95 transition-transform whitespace-nowrap ${style}`}
+            >
+              <PlatformIcon size={14} platform={platform} />
+              {label}
+            </a>
+          )
+        })()}
       </div>
 
       {/* Content */}
@@ -211,6 +263,21 @@ export default function RecipeDetail() {
               Start Cooking
             </button>
           )}
+
+          {recipe.source_url && (() => {
+            const { label, platform, style } = getSourceInfo(recipe.source_url)
+            return (
+              <a
+                href={recipe.source_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`w-full mt-3 py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 active:scale-95 transition-all shadow-soft ${style}`}
+              >
+                <PlatformIcon size={15} platform={platform} />
+                {label}
+              </a>
+            )
+          })()}
         </div>
 
         {/* Ingredients */}
@@ -272,21 +339,6 @@ export default function RecipeDetail() {
           </div>
         )}
 
-        {recipe.source_url && (
-          <div className="mb-4">
-            <a
-              href={recipe.source_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block bg-white dark:bg-stone-800 rounded-2xl shadow-card p-4 text-center"
-            >
-              <p className="text-xs text-warm-400 dark:text-stone-500 mb-1">Original source</p>
-              <p className="text-sm text-primary font-semibold truncate">
-                {(() => { try { return new URL(recipe.source_url).hostname.replace('www.', '') } catch { return recipe.source_url } })()}
-              </p>
-            </a>
-          </div>
-        )}
 
         {/* Similar Recipes */}
         {similarRecipes.length > 0 && (
