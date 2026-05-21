@@ -3,21 +3,23 @@
 // after unpausing the project or running the security migration.
 
 import { createClient } from '@supabase/supabase-js'
-import { config } from 'dotenv'
+import { readFileSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 
-config({ path: join(dirname(fileURLToPath(import.meta.url)), '../.env.local') })
-
-const supabase = createClient(
-  process.env.VITE_SUPABASE_URL,
-  process.env.VITE_SUPABASE_ANON_KEY
+const envPath = join(dirname(fileURLToPath(import.meta.url)), '../.env.local')
+const env = Object.fromEntries(
+  readFileSync(envPath, 'utf8').split('\n')
+    .filter(l => l.includes('=') && !l.startsWith('#'))
+    .map(l => { const i = l.indexOf('='); return [l.slice(0, i).trim(), l.slice(i + 1).trim()] })
 )
+
+const supabase = createClient(env.VITE_SUPABASE_URL, env.VITE_SUPABASE_ANON_KEY)
 
 const TABLES = ['profiles', 'recipes', 'made_it_log', 'grocery_items', 'pantry_items', 'meal_plans']
 
 async function verify() {
-  console.log('Supabase URL:', process.env.VITE_SUPABASE_URL)
+  console.log('Supabase URL:', env.VITE_SUPABASE_URL)
   console.log('')
 
   // 1. Basic connectivity — anon can reach the API
