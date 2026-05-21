@@ -1,84 +1,82 @@
 -- Plated - Supabase Schema
--- Run this in your Supabase SQL editor
+-- Full rebuild reference. Run in Supabase SQL editor on a fresh project.
+-- For existing projects, run supabase/migrations/20260519_security_grants.sql instead.
 
--- Enable UUID extension
 create extension if not exists "uuid-ossp";
 
--- Profiles (extends auth.users)
+-- ─── Tables ───────────────────────────────────────────────────────────────────
+
 create table public.profiles (
-  id uuid references auth.users(id) on delete cascade primary key,
-  display_name text,
-  avatar_url text,
-  partner_id uuid references auth.users(id),
-  ai_enabled boolean default false,
-  streak integer default 0,
-  created_at timestamptz default now()
+  id            uuid references auth.users(id) on delete cascade primary key,
+  display_name  text,
+  avatar_url    text,
+  partner_id    uuid references auth.users(id),
+  invite_code   text unique,
+  ai_enabled    boolean default false,
+  streak        integer default 0,
+  created_at    timestamptz default now()
 );
 
--- Recipes
 create table public.recipes (
-  id uuid default gen_random_uuid() primary key,
-  title text not null,
-  description text,
-  source_url text,
+  id            uuid default gen_random_uuid() primary key,
+  title         text not null,
+  description   text,
+  source_url    text,
   thumbnail_url text,
-  ingredients jsonb default '[]'::jsonb,
-  steps jsonb default '[]'::jsonb,
-  tags text[] default '{}',
-  prep_time integer,
-  cook_time integer,
-  servings integer default 4,
-  rating integer check (rating >= 1 and rating <= 5),
-  made_count integer default 0,
-  created_by uuid references auth.users(id),
-  created_at timestamptz default now(),
-  updated_at timestamptz default now()
+  ingredients   jsonb default '[]'::jsonb,
+  steps         jsonb default '[]'::jsonb,
+  tags          text[] default '{}',
+  prep_time     integer,
+  cook_time     integer,
+  servings      integer default 4,
+  rating        integer check (rating >= 1 and rating <= 5),
+  made_count    integer default 0,
+  created_by    uuid references auth.users(id),
+  created_at    timestamptz default now(),
+  updated_at    timestamptz default now()
 );
 
--- Made It Log
 create table public.made_it_log (
-  id uuid default gen_random_uuid() primary key,
-  recipe_id uuid references public.recipes(id) on delete cascade,
-  user_id uuid references auth.users(id),
-  rating integer check (rating >= 1 and rating <= 5),
-  notes text,
-  photo_url text,
-  cooked_at timestamptz default now()
+  id         uuid default gen_random_uuid() primary key,
+  recipe_id  uuid references public.recipes(id) on delete cascade,
+  user_id    uuid references auth.users(id),
+  rating     integer check (rating >= 1 and rating <= 5),
+  notes      text,
+  photo_url  text,
+  cooked_at  timestamptz default now()
 );
 
--- Grocery List
 create table public.grocery_items (
-  id uuid default gen_random_uuid() primary key,
-  name text not null,
-  amount text,
-  category text,
-  checked boolean default false,
-  recipe_id uuid references public.recipes(id) on delete set null,
+  id         uuid default gen_random_uuid() primary key,
+  name       text not null,
+  amount     text,
+  category   text,
+  checked    boolean default false,
+  recipe_id  uuid references public.recipes(id) on delete set null,
   created_at timestamptz default now()
 );
 
--- Pantry Items
 create table public.pantry_items (
-  id uuid default gen_random_uuid() primary key,
-  name text not null,
-  quantity text,
-  unit text,
-  category text,
+  id          uuid default gen_random_uuid() primary key,
+  name        text not null,
+  quantity    text,
+  unit        text,
+  category    text,
   running_low boolean default false,
-  created_at timestamptz default now()
+  created_at  timestamptz default now()
 );
 
--- Meal Plans
 create table public.meal_plans (
-  id uuid default gen_random_uuid() primary key,
-  week_start date not null,
-  day_of_week integer not null check (day_of_week >= 0 and day_of_week <= 6),
-  meal_type text not null default 'dinner',
-  recipe_id uuid references public.recipes(id) on delete cascade,
-  created_at timestamptz default now()
+  id           uuid default gen_random_uuid() primary key,
+  week_start   date not null,
+  day_of_week  integer not null check (day_of_week >= 0 and day_of_week <= 6),
+  meal_type    text not null default 'dinner',
+  recipe_id    uuid references public.recipes(id) on delete cascade,
+  created_at   timestamptz default now()
 );
 
--- Function to increment made_count
+-- ─── Functions ────────────────────────────────────────────────────────────────
+
 create or replace function public.increment_made_count(recipe_id uuid)
 returns void as $$
   update public.recipes
@@ -87,30 +85,63 @@ returns void as $$
   where id = recipe_id;
 $$ language sql security definer;
 
--- Row Level Security
-alter table public.profiles enable row level security;
-alter table public.recipes enable row level security;
-alter table public.made_it_log enable row level security;
-alter table public.grocery_items enable row level security;
-alter table public.pantry_items enable row level security;
-alter table public.meal_plans enable row level security;
+-- ─── Schema-level grants ──────────────────────────────────────────────────────
+-- Required explicitly as of Supabase's May 30 2026 security policy change.
 
--- Policies: authenticated users can read/write all records
--- (shared between both users in the couple)
-create policy "Authenticated users can do everything" on public.recipes
+grant usage on schema public to anon, authenticated;
+
+-- ─── Table-level grants ───────────────────────────────────────────────────────
+-- anon gets no table access — all routes require authentication.
+-- authenticated gets full CRUD; RLS policies below enforce fine-grained rules.
+
+grant select, insert, update, delete on public.profiles      to authenticated;
+grant select, insert, update, delete on public.recipes        to authenticated;
+grant select, insert, update, delete on public.made_it_log    to authenticated;
+grant select, insert, update, delete on public.grocery_items  to authenticated;
+grant select, insert, update, delete on public.pantry_items   to authenticated;
+grant select, insert, update, delete on public.meal_plans     to authenticated;
+
+-- ─── Function grants ──────────────────────────────────────────────────────────
+
+grant execute on function public.increment_made_count(uuid) to authenticated;
+
+-- ─── Row Level Security ───────────────────────────────────────────────────────
+
+alter table public.profiles      enable row level security;
+alter table public.recipes        enable row level security;
+alter table public.made_it_log    enable row level security;
+alter table public.grocery_items  enable row level security;
+alter table public.pantry_items   enable row level security;
+alter table public.meal_plans     enable row level security;
+
+-- Profiles: reads are open to all authenticated users (partner lookups, cook log
+-- display names, invite-code joins all query other users' rows). Writes are
+-- restricted to the profile owner.
+create policy "Profiles: read all"
+  on public.profiles for select
+  to authenticated using (true);
+
+create policy "Profiles: insert own"
+  on public.profiles for insert
+  to authenticated with check (id = auth.uid());
+
+create policy "Profiles: update own"
+  on public.profiles for update
+  to authenticated using (id = auth.uid()) with check (id = auth.uid());
+
+-- All other tables are a shared cookbook: any authenticated user can do anything.
+-- Finer-grained ownership filtering happens at the app layer.
+create policy "Authenticated full access" on public.recipes
   for all to authenticated using (true) with check (true);
 
-create policy "Authenticated users can do everything" on public.made_it_log
+create policy "Authenticated full access" on public.made_it_log
   for all to authenticated using (true) with check (true);
 
-create policy "Authenticated users can do everything" on public.grocery_items
+create policy "Authenticated full access" on public.grocery_items
   for all to authenticated using (true) with check (true);
 
-create policy "Authenticated users can do everything" on public.pantry_items
+create policy "Authenticated full access" on public.pantry_items
   for all to authenticated using (true) with check (true);
 
-create policy "Authenticated users can do everything" on public.meal_plans
+create policy "Authenticated full access" on public.meal_plans
   for all to authenticated using (true) with check (true);
-
-create policy "Users can manage own profile" on public.profiles
-  for all to authenticated using (id = auth.uid()) with check (id = auth.uid());
