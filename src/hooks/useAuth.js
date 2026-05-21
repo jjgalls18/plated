@@ -52,15 +52,6 @@ export function useAuth() {
     if (error) throw error
   }
 
-  const signInWithGoogle = async () => {
-    if (!isSupabaseConfigured) throw new Error('Supabase not configured')
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: window.location.origin },
-    })
-    if (error) throw error
-  }
-
   const signOut = async () => {
     if (!isSupabaseConfigured) {
       setUser(null)
@@ -76,5 +67,5 @@ export function useAuth() {
     setProfile((prev) => ({ ...prev, ...fields }))
   }
 
-  return { user, profile, loading, signIn, signUp, signInWithGoogle, signOut, updateProfile }
+  return { user, profile, loading, signIn, signUp, signOut, updateProfile }
 }
