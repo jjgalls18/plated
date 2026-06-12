@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'react-hot-toast'
@@ -19,11 +19,13 @@ import Auth from './pages/Auth'
 import AdminScreen from './pages/AdminScreen'
 import EditRecipe from './pages/EditRecipe'
 import LoadingScreen from './components/ui/LoadingScreen'
+import SetPassword from './pages/SetPassword'
 
 function AppRoutes() {
-  const { user, loading } = useAuth()
+  const { user, loading, recoveryMode } = useAuth()
 
   if (loading) return <LoadingScreen />
+  if (recoveryMode) return <SetPassword />
   if (!user) return <Auth />
 
   return (

@@ -1,6 +1,12 @@
 import { useState, useMemo } from 'react'
 import { ChevronLeft, ChevronRight, X, ChefHat, ShoppingCart, Search, List, CalendarDays } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import {
+  DndContext, DragOverlay,
+  useDraggable, useDroppable,
+  PointerSensor, TouchSensor,
+  useSensor, useSensors,
+} from '@dnd-kit/core'
 import { useAppStore } from '../stores/useAppStore'
 import { useRecipes } from '../hooks/useRecipes'
 import { useGrocery } from '../hooks/useGrocery'
@@ -52,14 +58,58 @@ function getMonthGrid(year, month) {
   return cells
 }
 
-// ─── Main Page ───────────────────────────────────────────────────────────────
+// ─── Drag primitives ──────────────────────────────────────────────────────────
+
+function DroppableSlot({ id, anyDragActive, children }) {
+  const { setNodeRef, isOver } = useDroppable({ id })
+  return (
+    <div
+      ref={setNodeRef}
+      className={`transition-colors ${isOver && anyDragActive ? 'bg-primary/5' : ''}`}
+    >
+      {children}
+    </div>
+  )
+}
+
+function DraggableRecipe({ id, isActive, recipe }) {
+  const { attributes, listeners, setNodeRef } = useDraggable({ id })
+  return (
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      className={`flex-1 flex items-center gap-2.5 min-w-0 touch-none select-none transition-opacity ${isActive ? 'opacity-30' : ''}`}
+    >
+      <Link
+        to={`/recipe/${recipe.id}`}
+        draggable={false}
+        className="flex-1 flex items-center gap-2.5 min-w-0"
+      >
+        <div className="w-8 h-8 rounded-lg overflow-hidden flex-shrink-0 bg-warm-100 dark:bg-stone-700">
+          {recipe.thumbnail_url ? (
+            <img src={recipe.thumbnail_url} alt={recipe.title} className="w-full h-full object-cover" draggable={false} />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center">
+              <ChefHat size={14} className="text-warm-300 dark:text-stone-600" />
+            </div>
+          )}
+        </div>
+        <span className="text-sm font-medium text-gray-900 dark:text-stone-50 truncate">{recipe.title}</span>
+      </Link>
+    </div>
+  )
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function MealPlan() {
   const [view, setView] = useState('list')
   const [weekOffset, setWeekOffset] = useState(0)
-  const [calOffset, setCalOffset] = useState(0)    // months from current
+  const [calOffset, setCalOffset] = useState(0)
   const [pickerState, setPickerState] = useState(null) // { date, slot }
-  const [selectedDay, setSelectedDay] = useState(null) // for calendar day-detail sheet
+  const [selectedDay, setSelectedDay] = useState(null)
+  const [activeDrag, setActiveDrag] = useState(null)   // { id, recipe }
 
   const { mealPlan, setMealPlan, removeMealPlan, incrementGroceryListsGenerated } = useAppStore()
   const { data: recipes = [] } = useRecipes()
@@ -80,8 +130,42 @@ export default function MealPlan() {
   const getRecipe = (id) => recipes.find((r) => r.id === id)
 
   const handlePlan = (date, slot) => setPickerState({ date, slot })
-
   const handleRemove = (date, slot) => removeMealPlan(date, slot)
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor,   { activationConstraint: { delay: 200, tolerance: 8 } })
+  )
+
+  const handleDragStart = ({ active }) => {
+    const [date, slot] = active.id.split('__')
+    const slots = getDaySlots(mealPlan, date)
+    const recipe = getRecipe(slots[slot])
+    if (recipe) setActiveDrag({ id: active.id, recipe })
+  }
+
+  const handleDragEnd = ({ active, over }) => {
+    setActiveDrag(null)
+    if (!over || active.id === over.id) return
+
+    const [srcDate, srcSlot] = active.id.split('__')
+    const [dstDate, dstSlot] = over.id.split('__')
+
+    const srcRecipeId = getDaySlots(mealPlan, srcDate)[srcSlot]
+    const dstRecipeId = getDaySlots(mealPlan, dstDate)[dstSlot]
+
+    if (!srcRecipeId) return
+
+    if (dstRecipeId) {
+      // Swap
+      setMealPlan(srcDate, srcSlot, dstRecipeId)
+      setMealPlan(dstDate, dstSlot, srcRecipeId)
+    } else {
+      // Move
+      setMealPlan(dstDate, dstSlot, srcRecipeId)
+      removeMealPlan(srcDate, srcSlot)
+    }
+  }
 
   const handleAddToGrocery = async () => {
     const allIngredients = weekDates.flatMap((date) => {
@@ -170,20 +254,42 @@ export default function MealPlan() {
               </button>
             </div>
 
-            <div className="space-y-3">
-              {weekDates.map((date) => (
-                <DayCard
-                  key={date}
-                  date={date}
-                  isToday={date === today}
-                  isPast={date < today}
-                  slots={getDaySlots(mealPlan, date)}
-                  getRecipe={getRecipe}
-                  onPlan={handlePlan}
-                  onRemove={handleRemove}
-                />
-              ))}
-            </div>
+            <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+              <div className="space-y-3">
+                {weekDates.map((date) => (
+                  <DayCard
+                    key={date}
+                    date={date}
+                    isToday={date === today}
+                    isPast={date < today}
+                    slots={getDaySlots(mealPlan, date)}
+                    getRecipe={getRecipe}
+                    onPlan={handlePlan}
+                    onRemove={handleRemove}
+                    activeDragId={activeDrag?.id ?? null}
+                  />
+                ))}
+              </div>
+
+              <DragOverlay dropAnimation={null}>
+                {activeDrag ? (
+                  <div className="flex items-center gap-2.5 bg-white dark:bg-stone-800 rounded-xl shadow-lg px-3 py-2.5 opacity-95 scale-105">
+                    <div className="w-8 h-8 rounded-lg overflow-hidden flex-shrink-0 bg-warm-100 dark:bg-stone-700">
+                      {activeDrag.recipe.thumbnail_url ? (
+                        <img src={activeDrag.recipe.thumbnail_url} alt={activeDrag.recipe.title} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <ChefHat size={14} className="text-warm-300 dark:text-stone-600" />
+                        </div>
+                      )}
+                    </div>
+                    <span className="text-sm font-semibold text-gray-900 dark:text-stone-50 max-w-[140px] truncate">
+                      {activeDrag.recipe.title}
+                    </span>
+                  </div>
+                ) : null}
+              </DragOverlay>
+            </DndContext>
           </>
         )}
 
@@ -281,6 +387,7 @@ export default function MealPlan() {
                   getRecipe={getRecipe}
                   onPlan={handlePlan}
                   onRemove={handleRemove}
+                  activeDragId={null}
                 />
                 <button
                   onClick={async () => {
@@ -324,7 +431,7 @@ export default function MealPlan() {
 
 // ─── Day Card ─────────────────────────────────────────────────────────────────
 
-function DayCard({ date, isToday, isPast, slots, getRecipe, onPlan, onRemove }) {
+function DayCard({ date, isToday, isPast, slots, getRecipe, onPlan, onRemove, activeDragId }) {
   const d = new Date(date + 'T00:00:00')
   const dayLabel = d.toLocaleDateString('en-US', { weekday: 'short' })
   const dayNum = d.getDate()
@@ -355,39 +462,33 @@ function DayCard({ date, isToday, isPast, slots, getRecipe, onPlan, onRemove }) 
         {SLOTS.map(({ key, label, emoji }) => {
           const recipeId = slots[key]
           const recipe = recipeId ? getRecipe(recipeId) : null
+          const slotId = `${date}__${key}`
+          const isActive = activeDragId === slotId
+
           return (
-            <div key={key} className="flex items-center gap-3 px-3 py-2.5 min-h-[48px]">
-              <span className="text-base w-6 text-center flex-shrink-0 leading-none">{emoji}</span>
-              {recipe ? (
-                <>
-                  <Link to={`/recipe/${recipe.id}`} className="flex-1 flex items-center gap-2.5 min-w-0">
-                    <div className="w-8 h-8 rounded-lg overflow-hidden flex-shrink-0 bg-warm-100 dark:bg-stone-700">
-                      {recipe.thumbnail_url ? (
-                        <img src={recipe.thumbnail_url} alt={recipe.title} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <ChefHat size={14} className="text-warm-300 dark:text-stone-600" />
-                        </div>
-                      )}
-                    </div>
-                    <span className="text-sm font-medium text-gray-900 dark:text-stone-50 truncate">{recipe.title}</span>
-                  </Link>
+            <DroppableSlot key={key} id={slotId} anyDragActive={!!activeDragId}>
+              <div className="flex items-center gap-3 px-3 py-2.5 min-h-[48px]">
+                <span className="text-base w-6 text-center flex-shrink-0 leading-none">{emoji}</span>
+                {recipe ? (
+                  <>
+                    <DraggableRecipe id={slotId} isActive={isActive} recipe={recipe} />
+                    <button
+                      onClick={() => onRemove(date, key)}
+                      className="p-1 text-warm-300 dark:text-stone-600 hover:text-red-400 transition-colors flex-shrink-0 active:scale-90"
+                    >
+                      <X size={14} />
+                    </button>
+                  </>
+                ) : (
                   <button
-                    onClick={() => onRemove(date, key)}
-                    className="p-1 text-warm-300 dark:text-stone-600 hover:text-red-400 transition-colors flex-shrink-0 active:scale-90"
+                    onClick={() => onPlan(date, key)}
+                    className="flex-1 text-left text-xs font-medium text-warm-300 dark:text-stone-600 active:text-primary transition-colors py-1"
                   >
-                    <X size={14} />
+                    + Add {label.toLowerCase()}
                   </button>
-                </>
-              ) : (
-                <button
-                  onClick={() => onPlan(date, key)}
-                  className="flex-1 text-left text-xs font-medium text-warm-300 dark:text-stone-600 active:text-primary transition-colors py-1"
-                >
-                  + Add {label.toLowerCase()}
-                </button>
-              )}
-            </div>
+                )}
+              </div>
+            </DroppableSlot>
           )
         })}
       </div>
