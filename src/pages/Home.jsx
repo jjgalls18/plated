@@ -509,7 +509,7 @@ export default function Home() {
   const lastEntry    = entries[0] ?? null
 
   const today = new Date().toISOString().split('T')[0]
-  const tonightRecipeId = mealPlan[today]
+  const tonightRecipeId = mealPlan[today]?.dinner
   const tonightRecipe = tonightRecipeId ? recipes.find((r) => r.id === tonightRecipeId) : null
 
   const weatherSuggestion = getWeatherSuggestion(weather, recipes)

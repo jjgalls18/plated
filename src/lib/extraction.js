@@ -52,7 +52,8 @@ export async function extractFromVideo(url, { anthropicApiKey, openaiApiKey, onS
 
   const { transcript } = await transcribeRes.json()
 
-  onStep?.('Extracting recipe…')
+  onStep?.('Transcribing with Whisper…')
+  onStep?.('Extracting recipe with Claude…')
 
   const recipe = await extractRecipeFromText(transcript, anthropicApiKey, url, savedRecipes)
   return recipe
@@ -82,7 +83,7 @@ export async function extractFromWeb(url, { anthropicApiKey, onStep, savedRecipe
 
   const { text } = await fetchRes.json()
 
-  onStep?.('Extracting recipe…')
+  onStep?.('Extracting recipe with Claude…')
 
   const recipe = await extractRecipeFromText(text, anthropicApiKey, url, savedRecipes)
   return recipe
@@ -180,7 +181,8 @@ ${text.slice(0, 7000)}`,
   }
 
   const data = await response.json()
-  const content = data.content?.[0]?.text?.trim()
+  const raw = data.content?.[0]?.text?.trim() ?? ''
+  const content = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
 
   let recipe
   try {

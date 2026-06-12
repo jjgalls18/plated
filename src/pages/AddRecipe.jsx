@@ -716,7 +716,9 @@ If no recipe is visible, return { "error": "No recipe found" }`,
 
       if (!res.ok) throw new Error('Claude API error')
       const data = await res.json()
-      const recipe = JSON.parse(data.content?.[0]?.text?.trim())
+      const raw = data.content?.[0]?.text?.trim() ?? ''
+      const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
+      const recipe = JSON.parse(cleaned)
       if (recipe.error) throw new Error(recipe.error)
       setExtracted(recipe)
       setStage('review')
