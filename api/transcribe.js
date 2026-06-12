@@ -27,9 +27,9 @@ export default async function handler(req, res) {
 
     const urlType = getUrlType(url)
 
-    if (urlType === 'tiktok') {
-      // Use cobalt.tools API (free, no auth required) to get downloadable URL
-      const cobaltRes = await fetch('https://api.cobalt.tools/api/json', {
+    if (urlType === 'tiktok' || urlType === 'instagram' || urlType === 'youtube') {
+      // cobalt.tools v7+ API — audio-only download
+      const cobaltRes = await fetch('https://api.cobalt.tools/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -37,40 +37,28 @@ export default async function handler(req, res) {
         },
         body: JSON.stringify({
           url,
-          vCodec: 'h264',
-          vQuality: '360',
-          aFormat: 'mp3',
-          isAudioOnly: true,
-          disableMetadata: true,
+          downloadMode: 'audio',
+          audioFormat: 'mp3',
         }),
       })
 
-      if (!cobaltRes.ok) throw new Error('Failed to get video download URL')
+      if (!cobaltRes.ok) {
+        const err = await cobaltRes.json().catch(() => ({}))
+        throw new Error(err.error?.code || 'Failed to get video download URL')
+      }
       const cobalt = await cobaltRes.json()
 
-      if (cobalt.status !== 'stream' && cobalt.status !== 'redirect') {
-        throw new Error(cobalt.text || 'Could not process video URL')
+      if (cobalt.status === 'error') {
+        throw new Error(cobalt.error?.code || 'Could not process video URL')
+      }
+      if (cobalt.status !== 'tunnel' && cobalt.status !== 'redirect') {
+        throw new Error('Unexpected response from cobalt — try a different URL')
       }
 
-      const downloadUrl = cobalt.url
-      const audioRes = await fetch(downloadUrl)
+      const audioRes = await fetch(cobalt.url)
       if (!audioRes.ok) throw new Error('Failed to download audio')
       audioBuffer = Buffer.from(await audioRes.arrayBuffer())
       filename = 'audio.mp3'
-
-    } else if (urlType === 'instagram' || urlType === 'youtube') {
-      // Same cobalt approach works for Instagram Reels and YouTube Shorts
-      const cobaltRes = await fetch('https://api.cobalt.tools/api/json', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify({ url, isAudioOnly: true, aFormat: 'mp3', disableMetadata: true }),
-      })
-      const cobalt = await cobaltRes.json()
-      if (cobalt.status !== 'stream' && cobalt.status !== 'redirect') {
-        throw new Error(cobalt.text || 'Could not process video URL')
-      }
-      const audioRes = await fetch(cobalt.url)
-      audioBuffer = Buffer.from(await audioRes.arrayBuffer())
 
     } else {
       throw new Error('Only TikTok, Instagram, and YouTube URLs are supported for video extraction')

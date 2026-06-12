@@ -48,6 +48,7 @@ create table public.made_it_log (
 
 create table public.grocery_items (
   id         uuid default gen_random_uuid() primary key,
+  user_id    uuid references auth.users(id),
   name       text not null,
   amount     text,
   category   text,

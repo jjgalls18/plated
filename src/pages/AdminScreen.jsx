@@ -209,8 +209,9 @@ function UsageTab({ aiCostLog, aiCosts, clearAiCostLog }) {
   )
 }
 
-function HealthTab({ recipes, groceryListsGenerated }) {
+function HealthTab({ recipes, groceryListsGenerated, mealPlan }) {
   const totalCooked = recipes.reduce((sum, r) => sum + (r.made_count || 0), 0)
+  const mealSlotsPlanned = Object.values(mealPlan || {}).reduce((sum, day) => sum + Object.keys(day).length, 0)
   const topRecipe = [...recipes].sort((a, b) => (b.made_count || 0) - (a.made_count || 0))[0]
   const avgRating = (() => {
     const rated = recipes.filter((r) => r.rating)
@@ -229,7 +230,7 @@ function HealthTab({ recipes, groceryListsGenerated }) {
           { label: 'Times cooked',        value: totalCooked },
           { label: 'Grocery lists made',  value: groceryListsGenerated },
           { label: 'Avg rating',          value: avgRating ? `${avgRating} ★` : '—' },
-          { label: 'Meal plans created',  value: 0, note: 'coming soon' },
+          { label: 'Meals planned',         value: mealSlotsPlanned },
           { label: 'Top tag',             value: topTag ? topTag[0] : '—' },
         ].map(({ label, value, note }) => (
           <div key={label} className="bg-white dark:bg-stone-800 rounded-2xl shadow-card p-4">
@@ -522,6 +523,7 @@ export default function AdminScreen() {
     anthropicApiKey, setAnthropicApiKey,
     openaiApiKey, setOpenaiApiKey,
     groceryListsGenerated,
+    mealPlan,
     clearGroceryList, clearCookedDates,
     darkMode,
   } = useAppStore()
@@ -575,7 +577,7 @@ export default function AdminScreen() {
           <UsageTab aiCostLog={aiCostLog} aiCosts={aiCosts} clearAiCostLog={clearAiCostLog} />
         )}
         {activeTab === 'Health' && (
-          <HealthTab recipes={recipes} groceryListsGenerated={groceryListsGenerated} />
+          <HealthTab recipes={recipes} groceryListsGenerated={groceryListsGenerated} mealPlan={mealPlan} />
         )}
         {activeTab === 'Controls' && (
           <ControlsTab
