@@ -180,7 +180,7 @@ export function useSimilarRecipes(recipe) {
 export function useLogMadeIt() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ recipeId, rating, notes }) => {
+    mutationFn: async ({ recipeId, rating, notes, photoUrl }) => {
       if (!isSupabaseConfigured) {
         const recipes = getMockRecipes()
         const updated = recipes.map((r) =>
@@ -191,7 +191,7 @@ export function useLogMadeIt() {
         saveMockRecipes(updated)
         return { recipeId, rating }
       }
-      const { error } = await supabase.from('made_it_log').insert({ recipe_id: recipeId, rating, notes })
+      const { error } = await supabase.from('made_it_log').insert({ recipe_id: recipeId, rating, notes, photo_url: photoUrl || null })
       if (error) throw error
       const { error: err2 } = await supabase.rpc('increment_made_count', { recipe_id: recipeId })
       if (err2) throw err2

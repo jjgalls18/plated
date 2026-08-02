@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'react-hot-toast'
@@ -7,19 +7,22 @@ import { useAuth } from './hooks/useAuth'
 import { useAppStore } from './stores/useAppStore'
 import AppShell from './components/layout/AppShell'
 import Home from './pages/Home'
-import Recipes from './pages/Recipes'
-import Search from './pages/Search'
-import AddRecipe from './pages/AddRecipe'
-import RecipeDetail from './pages/RecipeDetail'
-import CookingMode from './pages/CookingMode'
-import MealPlan from './pages/MealPlan'
-import Grocery from './pages/Grocery'
-import Profile from './pages/Profile'
 import Auth from './pages/Auth'
-import AdminScreen from './pages/AdminScreen'
-import EditRecipe from './pages/EditRecipe'
 import LoadingScreen from './components/ui/LoadingScreen'
 import SetPassword from './pages/SetPassword'
+
+// Code-split everything past the landing screen — keeps the initial mobile
+// bundle to just what's needed for first paint (auth + home).
+const Recipes = lazy(() => import('./pages/Recipes'))
+const Search = lazy(() => import('./pages/Search'))
+const AddRecipe = lazy(() => import('./pages/AddRecipe'))
+const RecipeDetail = lazy(() => import('./pages/RecipeDetail'))
+const CookingMode = lazy(() => import('./pages/CookingMode'))
+const MealPlan = lazy(() => import('./pages/MealPlan'))
+const Grocery = lazy(() => import('./pages/Grocery'))
+const Profile = lazy(() => import('./pages/Profile'))
+const AdminScreen = lazy(() => import('./pages/AdminScreen'))
+const EditRecipe = lazy(() => import('./pages/EditRecipe'))
 
 function AppRoutes() {
   const { user, loading, recoveryMode } = useAuth()
@@ -29,23 +32,25 @@ function AppRoutes() {
   if (!user) return <Auth />
 
   return (
-    <Routes>
-      {/* Full-screen — no bottom nav */}
-      <Route path="/recipe/:id/cook" element={<CookingMode />} />
-      <Route path="/recipe/:id/edit" element={<EditRecipe />} />
-      <Route path="/admin" element={<AdminScreen />} />
+    <Suspense fallback={<LoadingScreen />}>
+      <Routes>
+        {/* Full-screen — no bottom nav */}
+        <Route path="/recipe/:id/cook" element={<CookingMode />} />
+        <Route path="/recipe/:id/edit" element={<EditRecipe />} />
+        <Route path="/admin" element={<AdminScreen />} />
 
-      {/* Standard shell routes */}
-      <Route path="/" element={<AppShell><Home /></AppShell>} />
-      <Route path="/recipes" element={<AppShell><Recipes /></AppShell>} />
-      <Route path="/search" element={<AppShell><Search /></AppShell>} />
-      <Route path="/add" element={<AppShell><AddRecipe /></AppShell>} />
-      <Route path="/recipe/:id" element={<AppShell><RecipeDetail /></AppShell>} />
-      <Route path="/meal-plan" element={<AppShell><MealPlan /></AppShell>} />
-      <Route path="/grocery" element={<AppShell><Grocery /></AppShell>} />
-      <Route path="/profile" element={<AppShell><Profile /></AppShell>} />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        {/* Standard shell routes */}
+        <Route path="/" element={<AppShell><Home /></AppShell>} />
+        <Route path="/recipes" element={<AppShell><Recipes /></AppShell>} />
+        <Route path="/search" element={<AppShell><Search /></AppShell>} />
+        <Route path="/add" element={<AppShell><AddRecipe /></AppShell>} />
+        <Route path="/recipe/:id" element={<AppShell><RecipeDetail /></AppShell>} />
+        <Route path="/meal-plan" element={<AppShell><MealPlan /></AppShell>} />
+        <Route path="/grocery" element={<AppShell><Grocery /></AppShell>} />
+        <Route path="/profile" element={<AppShell><Profile /></AppShell>} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Suspense>
   )
 }
 

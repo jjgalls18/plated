@@ -4,7 +4,18 @@
  * - Web URLs (food blogs, etc.): fetch HTML → Claude extraction
  */
 
+import { supabase } from './supabase'
+import { computeCost } from './aiCost'
+
 const VIDEO_HOSTS = ['tiktok.com', 'instagram.com', 'youtube.com', 'youtu.be', 'reels']
+
+// /api/fetch-page and /api/transcribe proxy arbitrary outbound requests — require
+// a valid Supabase session so the endpoints aren't a public open proxy.
+export async function authHeaders() {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session?.access_token) throw new Error('Not signed in')
+  return { Authorization: `Bearer ${session.access_token}` }
+}
 
 export function isVideoUrl(url) {
   try {
@@ -31,7 +42,7 @@ export function getUrlType(url) {
  * Extract recipe from a video URL (TikTok, Instagram, YouTube)
  * Uses Whisper for transcription + Claude for extraction
  */
-export async function extractFromVideo(url, { anthropicApiKey, openaiApiKey, onStep, savedRecipes = [] }) {
+export async function extractFromVideo(url, { anthropicApiKey, openaiApiKey, onStep, savedRecipes = [], logAiCost }) {
   if (!anthropicApiKey || !openaiApiKey) {
     throw new Error('API keys required — add them in the admin panel (tap logo 5 times)')
   }
@@ -41,7 +52,7 @@ export async function extractFromVideo(url, { anthropicApiKey, openaiApiKey, onS
   // Call our Vercel serverless function to download + transcribe
   const transcribeRes = await fetch('/api/transcribe', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
     body: JSON.stringify({ url, openaiApiKey }),
   })
 
@@ -55,7 +66,13 @@ export async function extractFromVideo(url, { anthropicApiKey, openaiApiKey, onS
   onStep?.('Transcribing with Whisper…')
   onStep?.('Extracting recipe with Claude…')
 
-  const recipe = await extractRecipeFromText(transcript, anthropicApiKey, url, savedRecipes)
+  // TikTok/Instagram/YouTube extraction uses Sonnet 5 — transcripts are messier
+  // than clean web-page text and benefit from the stronger model.
+  const recipe = await extractRecipeFromText(transcript, anthropicApiKey, url, savedRecipes, {
+    model: 'claude-sonnet-5',
+    feature: 'video_extraction',
+    logAiCost,
+  })
   return recipe
 }
 
@@ -63,7 +80,7 @@ export async function extractFromVideo(url, { anthropicApiKey, openaiApiKey, onS
  * Extract recipe from a web URL (food blog, recipe site)
  * Fetches HTML and uses Claude to extract
  */
-export async function extractFromWeb(url, { anthropicApiKey, onStep, savedRecipes = [] }) {
+export async function extractFromWeb(url, { anthropicApiKey, onStep, savedRecipes = [], logAiCost }) {
   if (!anthropicApiKey) {
     throw new Error('Anthropic API key required — add it in the admin panel (tap logo 5 times)')
   }
@@ -72,7 +89,7 @@ export async function extractFromWeb(url, { anthropicApiKey, onStep, savedRecipe
 
   const fetchRes = await fetch('/api/fetch-page', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
     body: JSON.stringify({ url }),
   })
 
@@ -85,7 +102,11 @@ export async function extractFromWeb(url, { anthropicApiKey, onStep, savedRecipe
 
   onStep?.('Extracting recipe with Claude…')
 
-  const recipe = await extractRecipeFromText(text, anthropicApiKey, url, savedRecipes)
+  const recipe = await extractRecipeFromText(text, anthropicApiKey, url, savedRecipes, {
+    model: 'claude-haiku-4-5-20251001',
+    feature: 'web_extraction',
+    logAiCost,
+  })
   return recipe
 }
 
@@ -117,19 +138,15 @@ function buildFewShotExamples(savedRecipes) {
 /**
  * Call Claude to extract a structured recipe from text
  */
-async function extractRecipeFromText(text, anthropicApiKey, sourceUrl, savedRecipes = []) {
+async function extractRecipeFromText(text, anthropicApiKey, sourceUrl, savedRecipes = [], { model = 'claude-haiku-4-5-20251001', feature = 'extraction', logAiCost } = {}) {
   const fewShot = buildFewShotExamples(savedRecipes)
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
+  const response = await fetch('/api/anthropic', {
     method: 'POST',
-    headers: {
-      'x-api-key': anthropicApiKey,
-      'anthropic-version': '2023-06-01',
-      'content-type': 'application/json',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
+    headers: { 'content-type': 'application/json', ...(await authHeaders()) },
     body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
+      apiKey: anthropicApiKey,
+      model,
       max_tokens: 2000,
       messages: [{
         role: 'user',
@@ -181,6 +198,7 @@ ${text.slice(0, 7000)}`,
   }
 
   const data = await response.json()
+  logAiCost?.(computeCost(model, data.usage), feature)
   const raw = data.content?.[0]?.text?.trim() ?? ''
   const content = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
 

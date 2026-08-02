@@ -3,12 +3,13 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
   ArrowLeft, Clock, Users, Star, ChefHat, ShoppingCart,
   Minus, Plus, Trash2, Check, Share2, Play, Pencil,
-  Globe, ExternalLink
+  Globe, ExternalLink, X
 } from 'lucide-react'
 import { useRecipe, useLogMadeIt, useDeleteRecipe, useSimilarRecipes } from '../hooks/useRecipes'
 import { useGrocery } from '../hooks/useGrocery'
 import { useAppStore } from '../stores/useAppStore'
 import { useAuth } from '../hooks/useAuth'
+import ThumbnailPicker from '../components/ui/ThumbnailPicker'
 import toast from 'react-hot-toast'
 
 function PlatformIcon({ size = 15, platform }) {
@@ -75,10 +76,10 @@ export default function RecipeDetail() {
 
   const totalTime = (recipe.prep_time || 0) + (recipe.cook_time || 0)
 
-  const handleMadeItSave = async ({ rating, notes, person }) => {
+  const handleMadeItSave = async ({ rating, notes, person, photoUrl }) => {
     try {
-      await logMadeIt.mutateAsync({ recipeId: recipe.id, rating, notes })
-      logCook({ person, recipeId: recipe.id, recipeTitle: recipe.title, recipeThumbnail: recipe.thumbnail_url })
+      await logMadeIt.mutateAsync({ recipeId: recipe.id, rating, notes, photoUrl })
+      logCook({ person, recipeId: recipe.id, recipeTitle: recipe.title, recipeThumbnail: photoUrl || recipe.thumbnail_url })
       setShowMadeItModal(false)
       toast.success('Logged! Great cooking 🎉')
     } catch {
@@ -124,10 +125,22 @@ export default function RecipeDetail() {
 
   const scaleAmount = (amount) => {
     if (!amount || servingScale === 1) return amount
-    const num = parseFloat(amount)
-    if (isNaN(num)) return amount
-    const scaled = num * servingScale
-    return scaled % 1 === 0 ? scaled.toString() : scaled.toFixed(1)
+    // Match a leading quantity — plain number, fraction ("1/2"), or range ("1-2") —
+    // and scale just that part, preserving whatever unit/text follows (e.g. "cups").
+    const match = amount.match(/^(\d+\.?\d*)(?:\/(\d+\.?\d*))?(?:\s*-\s*(\d+\.?\d*)(?:\/(\d+\.?\d*))?)?/)
+    if (!match || !match[0]) return amount
+
+    const [full, n1, d1, n2, d2] = match
+    const rest = amount.slice(full.length)
+    const format = (n) => {
+      const rounded = Math.round(n * 100) / 100
+      return rounded % 1 === 0 ? rounded.toString() : String(rounded)
+    }
+    const val1 = format((d1 ? parseFloat(n1) / parseFloat(d1) : parseFloat(n1)) * servingScale)
+    if (!n2) return `${val1}${rest}`
+
+    const val2 = format((d2 ? parseFloat(n2) / parseFloat(d2) : parseFloat(n2)) * servingScale)
+    return `${val1}-${val2}${rest}`
   }
 
   const hasSteps = recipe.steps?.length > 0
@@ -423,10 +436,11 @@ function MadeItModal({ recipe, onClose, onSave, saving, currentUser = 'jacob' })
   const [rating, setRating] = useState(recipe.rating || 0)
   const [hovered, setHovered] = useState(0)
   const [notes, setNotes] = useState('')
+  const [photoUrl, setPhotoUrl] = useState(null)
 
   const handleSave = () => {
     if (!rating) return toast.error('Add a star rating first')
-    onSave({ rating, notes: notes.trim() || null, person })
+    onSave({ rating, notes: notes.trim() || null, person, photoUrl })
   }
 
   return (
@@ -493,6 +507,22 @@ function MadeItModal({ recipe, onClose, onSave, saving, currentUser = 'jacob' })
             rows={2}
             className="w-full p-3.5 bg-warm-100 dark:bg-stone-700 rounded-2xl text-sm text-gray-900 dark:text-stone-50 placeholder-warm-400 dark:placeholder-stone-500 outline-none resize-none focus:ring-2 focus:ring-primary/20"
           />
+        </div>
+
+        <div className="mb-5 flex items-center gap-3">
+          {photoUrl && (
+            <div className="relative w-14 h-14 rounded-xl overflow-hidden flex-shrink-0">
+              <img src={photoUrl} alt="How it turned out" className="w-full h-full object-cover" />
+              <button
+                type="button"
+                onClick={() => setPhotoUrl(null)}
+                className="absolute top-0.5 right-0.5 bg-black/60 rounded-full w-4 h-4 flex items-center justify-center"
+              >
+                <X size={10} className="text-white" />
+              </button>
+            </div>
+          )}
+          <ThumbnailPicker url={photoUrl} onChange={setPhotoUrl} compact />
         </div>
 
         <div className="flex gap-3">

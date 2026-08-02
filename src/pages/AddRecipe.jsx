@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Link as LinkIcon, PenLine, Camera, Plus, X, ChevronRight, Loader2, CheckCircle2, AlertCircle, AlertTriangle } from 'lucide-react'
 import { useAddRecipe, useRecipes } from '../hooks/useRecipes'
 import { useAppStore } from '../stores/useAppStore'
-import { extractFromVideo, extractFromWeb, isVideoUrl } from '../lib/extraction'
+import { extractFromVideo, extractFromWeb, isVideoUrl, authHeaders } from '../lib/extraction'
+import { computeCost } from '../lib/aiCost'
 import ThumbnailPicker from '../components/ui/ThumbnailPicker'
 import toast from 'react-hot-toast'
 
@@ -68,7 +69,7 @@ const STEPS_WEB = [
 ]
 
 function UrlMode({ onBack, addRecipe, navigate }) {
-  const { anthropicApiKey, openaiApiKey } = useAppStore()
+  const { anthropicApiKey, openaiApiKey, aiEnabled, logAiCost } = useAppStore()
   const { data: savedRecipes = [] } = useRecipes()
   const [url, setUrl] = useState('')
   const [stage, setStage] = useState('input') // input | processing | review | error
@@ -78,10 +79,14 @@ function UrlMode({ onBack, addRecipe, navigate }) {
   const [saving, setSaving] = useState(false)
 
   const isVideo = isVideoUrl(url)
-  const hasKeys = isVideo ? (anthropicApiKey && openaiApiKey) : !!anthropicApiKey
+  const hasKeys = aiEnabled && (isVideo ? (anthropicApiKey && openaiApiKey) : !!anthropicApiKey)
 
   const handleExtract = async () => {
     if (!url.trim()) return
+    if (!aiEnabled) {
+      toast.error('AI is turned off — enable it in admin settings (tap logo 5×)')
+      return
+    }
     setStage('processing')
     setStepLabel('')
     try {
@@ -92,12 +97,14 @@ function UrlMode({ onBack, addRecipe, navigate }) {
           openaiApiKey,
           onStep: setStepLabel,
           savedRecipes,
+          logAiCost,
         })
       } else {
         recipe = await extractFromWeb(url, {
           anthropicApiKey,
           onStep: setStepLabel,
           savedRecipes,
+          logAiCost,
         })
       }
       setExtracted(recipe)
@@ -199,14 +206,18 @@ function UrlMode({ onBack, addRecipe, navigate }) {
           </div>
         )}
 
-        {/* API key warning */}
+        {/* API key / AI-off warning */}
         {url.length > 8 && !hasKeys && (
           <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40 rounded-2xl p-4">
-            <p className="text-amber-800 dark:text-amber-300 text-xs font-semibold mb-1">API keys needed</p>
+            <p className="text-amber-800 dark:text-amber-300 text-xs font-semibold mb-1">
+              {!aiEnabled ? 'AI is turned off' : 'API keys needed'}
+            </p>
             <p className="text-amber-700 dark:text-amber-400 text-xs leading-relaxed">
-              {isVideo
-                ? 'Video extraction needs both an Anthropic key and an OpenAI key. Tap the Plated logo 5 times to open admin settings.'
-                : 'Web extraction needs an Anthropic API key. Tap the Plated logo 5 times to open admin settings.'}
+              {!aiEnabled
+                ? 'Turn on AI in admin settings to use recipe extraction. Tap the Plated logo 5 times to open admin settings.'
+                : isVideo
+                  ? 'Video extraction needs both an Anthropic key and an OpenAI key. Tap the Plated logo 5 times to open admin settings.'
+                  : 'Web extraction needs an Anthropic API key. Tap the Plated logo 5 times to open admin settings.'}
             </p>
           </div>
         )}
@@ -655,8 +666,10 @@ function ManualMode({ onBack, addRecipe, navigate }) {
 
 // ─── Photo Mode ───────────────────────────────────────────────────────────────
 
+const PHOTO_MODEL = 'claude-sonnet-5'
+
 function PhotoMode({ onBack, addRecipe, navigate }) {
-  const { anthropicApiKey } = useAppStore()
+  const { anthropicApiKey, aiEnabled, logAiCost } = useAppStore()
   const [stage, setStage] = useState('input')
   const [extracted, setExtracted] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -666,8 +679,8 @@ function PhotoMode({ onBack, addRecipe, navigate }) {
   const handleFile = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (!anthropicApiKey) {
-      toast.error('Add your Anthropic API key first (tap logo 5× for admin)')
+    if (!anthropicApiKey || !aiEnabled) {
+      toast.error(aiEnabled ? 'Add your Anthropic API key first (tap logo 5× for admin)' : 'AI is turned off — enable it in admin settings (tap logo 5×)')
       return
     }
 
@@ -676,16 +689,12 @@ function PhotoMode({ onBack, addRecipe, navigate }) {
       const base64 = await fileToBase64(file)
       const mediaType = file.type || 'image/jpeg'
 
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
+      const res = await fetch('/api/anthropic', {
         method: 'POST',
-        headers: {
-          'x-api-key': anthropicApiKey,
-          'anthropic-version': '2023-06-01',
-          'content-type': 'application/json',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
+        headers: { 'content-type': 'application/json', ...(await authHeaders()) },
         body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
+          apiKey: anthropicApiKey,
+          model: PHOTO_MODEL,
           max_tokens: 2000,
           messages: [{
             role: 'user',
@@ -716,6 +725,7 @@ If no recipe is visible, return { "error": "No recipe found" }`,
 
       if (!res.ok) throw new Error('Claude API error')
       const data = await res.json()
+      logAiCost?.(computeCost(PHOTO_MODEL, data.usage), 'photo_extraction')
       const raw = data.content?.[0]?.text?.trim() ?? ''
       const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
       const recipe = JSON.parse(cleaned)
@@ -788,10 +798,16 @@ If no recipe is visible, return { "error": "No recipe found" }`,
           )}
         </button>
 
-        {!anthropicApiKey && (
+        {(!anthropicApiKey || !aiEnabled) && (
           <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40 rounded-2xl p-4">
-            <p className="text-amber-800 dark:text-amber-300 text-xs font-semibold mb-1">API key needed</p>
-            <p className="text-amber-700 dark:text-amber-400 text-xs">Add your Anthropic API key in admin settings (tap the logo 5 times).</p>
+            <p className="text-amber-800 dark:text-amber-300 text-xs font-semibold mb-1">
+              {!aiEnabled ? 'AI is turned off' : 'API key needed'}
+            </p>
+            <p className="text-amber-700 dark:text-amber-400 text-xs">
+              {!aiEnabled
+                ? 'Turn on AI in admin settings to scan photos (tap the logo 5 times).'
+                : 'Add your Anthropic API key in admin settings (tap the logo 5 times).'}
+            </p>
           </div>
         )}
       </div>

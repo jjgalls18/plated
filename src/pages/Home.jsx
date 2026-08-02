@@ -242,8 +242,8 @@ function LastCookedCard({ entry, myId, myName = 'You', partnerName = 'Partner' }
       <div className="bg-white dark:bg-stone-800 rounded-3xl shadow-card overflow-hidden active:scale-[0.98] transition-transform">
         <div className="flex items-center gap-4 p-4">
           <div className="w-20 h-20 rounded-2xl overflow-hidden flex-shrink-0">
-            {entry.recipeThumbnail ? (
-              <img src={entry.recipeThumbnail} alt={entry.recipeTitle} className="w-full h-full object-cover" />
+            {(entry.photoUrl || entry.recipeThumbnail) ? (
+              <img src={entry.photoUrl || entry.recipeThumbnail} alt={entry.recipeTitle} className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full bg-gradient-to-br from-primary-200 to-primary-400 flex items-center justify-center">
                 <ChefHat size={28} className="text-white opacity-50" />
@@ -373,7 +373,7 @@ function TonightCard({ recipe, navigate }) {
             <span className="text-white text-[11px] font-semibold">Tonight's dinner</span>
           </div>
           <div className="absolute bottom-0 left-0 right-0 p-4">
-            <p className="font-display font-semibold text-white text-lg leading-tight">{recipe.title}</p>
+            <p className="font-display font-semibold text-white text-lg leading-tight line-clamp-2">{recipe.title}</p>
           </div>
         </div>
       </div>
@@ -599,8 +599,8 @@ export default function Home() {
                 return (
                   <Link key={entry.id} to={`/recipe/${entry.recipeId}`} className="flex items-center gap-3 bg-white dark:bg-stone-800 rounded-2xl shadow-card p-3 active:scale-[0.98] transition-transform">
                     <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0 bg-warm-100 dark:bg-stone-700">
-                      {entry.recipeThumbnail
-                        ? <img src={entry.recipeThumbnail} alt={entry.recipeTitle} className="w-full h-full object-cover" />
+                      {(entry.photoUrl || entry.recipeThumbnail)
+                        ? <img src={entry.photoUrl || entry.recipeThumbnail} alt={entry.recipeTitle} className="w-full h-full object-cover" />
                         : <div className="w-full h-full flex items-center justify-center"><ChefHat size={16} className="text-warm-300" /></div>
                       }
                     </div>

@@ -130,19 +130,33 @@ create policy "Profiles: update own"
   on public.profiles for update
   to authenticated using (id = auth.uid()) with check (id = auth.uid());
 
--- All other tables are a shared cookbook: any authenticated user can do anything.
--- Finer-grained ownership filtering happens at the app layer.
-create policy "Authenticated full access" on public.recipes
-  for all to authenticated using (true) with check (true);
+-- All other tables are a shared cookbook: any LINKED partner can do anything
+-- (finer-grained ownership filtering happens at the app layer). Scoped to
+-- linked profiles rather than `using (true)` so a stranger who signs up
+-- directly against the public anon key — bypassing the app's UI, which has
+-- no sign-up form — gets nothing. See migrations/20260801_scope_rls_to_linked_partners.sql.
+-- Still disable public sign-ups in the Supabase Auth dashboard as the primary defense.
+create or replace function public.is_linked_partner()
+returns boolean as $$
+  select exists (
+    select 1 from public.profiles
+    where id = auth.uid() and partner_id is not null
+  );
+$$ language sql stable security definer set search_path = public;
 
-create policy "Authenticated full access" on public.made_it_log
-  for all to authenticated using (true) with check (true);
+grant execute on function public.is_linked_partner() to authenticated;
 
-create policy "Authenticated full access" on public.grocery_items
-  for all to authenticated using (true) with check (true);
+create policy "Linked partners full access" on public.recipes
+  for all to authenticated using (public.is_linked_partner()) with check (public.is_linked_partner());
 
-create policy "Authenticated full access" on public.pantry_items
-  for all to authenticated using (true) with check (true);
+create policy "Linked partners full access" on public.made_it_log
+  for all to authenticated using (public.is_linked_partner()) with check (public.is_linked_partner());
 
-create policy "Authenticated full access" on public.meal_plans
-  for all to authenticated using (true) with check (true);
+create policy "Linked partners full access" on public.grocery_items
+  for all to authenticated using (public.is_linked_partner()) with check (public.is_linked_partner());
+
+create policy "Linked partners full access" on public.pantry_items
+  for all to authenticated using (public.is_linked_partner()) with check (public.is_linked_partner());
+
+create policy "Linked partners full access" on public.meal_plans
+  for all to authenticated using (public.is_linked_partner()) with check (public.is_linked_partner());

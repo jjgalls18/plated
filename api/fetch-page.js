@@ -4,17 +4,38 @@
  * Body: { url: string }
  */
 
+import { requireUser } from './_verifyAuth.js'
+
 export const config = { maxDuration: 15 }
+
+// Blocks obvious internal/private targets so this endpoint can't be used to
+// probe the Vercel-internal network or cloud metadata services (SSRF).
+const BLOCKED_HOSTS = /^(localhost|127\.|0\.|10\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|::1$|\[::1\])/i
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
+  const user = await requireUser(req)
+  if (!user) {
+    return res.status(401).json({ error: 'Not signed in' })
+  }
+
   const { url } = req.body
 
   if (!url) {
     return res.status(400).json({ error: 'Missing url' })
+  }
+
+  let parsed
+  try {
+    parsed = new URL(url)
+  } catch {
+    return res.status(400).json({ error: 'Invalid url' })
+  }
+  if (!['http:', 'https:'].includes(parsed.protocol) || BLOCKED_HOSTS.test(parsed.hostname)) {
+    return res.status(400).json({ error: 'URL not allowed' })
   }
 
   try {

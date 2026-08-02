@@ -45,6 +45,10 @@ export const useAppStore = create(
       setAnthropicApiKey: (key) => set({ anthropicApiKey: key }),
       setOpenaiApiKey: (key) => set({ openaiApiKey: key }),
 
+      // Admin screen PIN — empty string means no lock (default, unchanged behavior)
+      adminPin: '',
+      setAdminPin: (pin) => set({ adminPin: pin }),
+
       // Cooked dates for streak tracking (YYYY-MM-DD strings)
       cookedDates: [],
       addCookedDate: () => set((s) => {
@@ -126,6 +130,7 @@ export const useAppStore = create(
         aiEnabled: state.aiEnabled,
         anthropicApiKey: state.anthropicApiKey,
         openaiApiKey: state.openaiApiKey,
+        adminPin: state.adminPin,
         groceryItems: state.groceryItems,
         cookedDates: state.cookedDates,
         cookLog: state.cookLog,

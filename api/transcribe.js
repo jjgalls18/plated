@@ -5,12 +5,18 @@
  */
 
 import { FormData, Blob } from 'node:buffer' // Node 18 has these built in
+import { requireUser } from './_verifyAuth.js'
 
 export const config = { maxDuration: 60 }
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
+  }
+
+  const user = await requireUser(req)
+  if (!user) {
+    return res.status(401).json({ error: 'Not signed in' })
   }
 
   const { url, openaiApiKey } = req.body

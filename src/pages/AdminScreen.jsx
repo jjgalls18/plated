@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, Database, Trash2, RotateCcw, ShoppingCart, Flame,
-  AlertTriangle, Eye, EyeOff, Check, Zap, Download, X,
+  AlertTriangle, Eye, EyeOff, Check, Zap, Download, X, Lock,
 } from 'lucide-react'
 import { useAppStore, calculateAiCosts } from '../stores/useAppStore'
 import { useGrocery } from '../hooks/useGrocery'
@@ -254,11 +254,25 @@ function HealthTab({ recipes, groceryListsGenerated, mealPlan }) {
   )
 }
 
-function ControlsTab({ recipes, aiEnabled, setAiEnabled, anthropicApiKey, setAnthropicApiKey, openaiApiKey, setOpenaiApiKey, qc, clearGroceryList, clearCookedDates, clearSharedGrocery }) {
+function ControlsTab({ recipes, aiEnabled, setAiEnabled, anthropicApiKey, setAnthropicApiKey, openaiApiKey, setOpenaiApiKey, qc, clearGroceryList, clearCookedDates, clearSharedGrocery, adminPin, setAdminPin }) {
   const [showKey, setShowKey] = useState(false)
   const [keyInput, setKeyInput] = useState(anthropicApiKey)
   const [showOpenAiKey, setShowOpenAiKey] = useState(false)
   const [openAiKeyInput, setOpenAiKeyInput] = useState(openaiApiKey)
+  const [pinInput, setPinInput] = useState('')
+
+  const handleSavePin = () => {
+    if (!/^\d{4,8}$/.test(pinInput)) { toast.error('PIN must be 4-8 digits'); return }
+    setAdminPin(pinInput)
+    setPinInput('')
+    toast.success('Admin PIN set — you\'ll need it next time you open this screen')
+  }
+
+  const handleRemovePin = () => {
+    if (!window.confirm('Remove the admin PIN? Anyone signed in will be able to open this screen.')) return
+    setAdminPin('')
+    toast.success('Admin PIN removed')
+  }
 
   const handleSaveKey = () => {
     setAnthropicApiKey(keyInput)
@@ -384,7 +398,7 @@ function ControlsTab({ recipes, aiEnabled, setAiEnabled, anthropicApiKey, setAnt
           )}
         </div>
         <p className="text-[11px] text-warm-400 dark:text-stone-500 leading-relaxed">
-          Stored locally on this device only. Never sent anywhere except Anthropic.
+          Stored locally on this device only. Sent only to Plated&apos;s own server, which relays it to Anthropic — never sent directly from this device to any third party.
         </p>
 
         <div className="mt-4 pt-4 border-t border-warm-100 dark:border-stone-700">
@@ -459,6 +473,40 @@ function ControlsTab({ recipes, aiEnabled, setAiEnabled, anthropicApiKey, setAnt
         </div>
       </div>
 
+      {/* Admin lock */}
+      <div className="bg-white dark:bg-stone-800 rounded-2xl shadow-card p-5">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-9 h-9 bg-amber-50 dark:bg-amber-900/30 rounded-xl flex items-center justify-center">
+            <Lock size={16} className="text-amber-600 dark:text-amber-400" />
+          </div>
+          <div className="flex-1">
+            <p className="font-semibold text-gray-900 dark:text-stone-50 text-sm">Admin Lock</p>
+            <p className="text-warm-400 dark:text-stone-500 text-xs">
+              {adminPin ? 'PIN required to open this screen' : 'Off — anyone signed in can open this screen'}
+            </p>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <input
+            type="password"
+            inputMode="numeric"
+            placeholder={adminPin ? 'New 4-8 digit PIN' : 'Set a 4-8 digit PIN'}
+            value={pinInput}
+            onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ''))}
+            maxLength={8}
+            className="flex-1 px-3 py-2.5 bg-warm-100 dark:bg-stone-700 rounded-xl text-sm font-mono text-gray-900 dark:text-stone-100 placeholder-warm-300 dark:placeholder-stone-500 outline-none focus:ring-2 focus:ring-primary/30"
+          />
+          <button onClick={handleSavePin} className="bg-primary text-white px-3 py-2 rounded-xl">
+            <Check size={16} />
+          </button>
+          {adminPin && (
+            <button onClick={handleRemovePin} className="bg-warm-100 dark:bg-stone-700 text-rose-400 px-3 py-2 rounded-xl">
+              <X size={16} />
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Danger */}
       <div className="bg-white dark:bg-stone-800 rounded-2xl shadow-card p-5 border border-rose-200 dark:border-rose-900/40">
         <div className="flex items-center gap-2 mb-4">
@@ -512,11 +560,47 @@ function ActionRow({ icon, label, description, color, onClick }) {
 
 const TABS = ['Usage', 'Health', 'Controls']
 
+function PinGate({ pin, onUnlock, darkMode }) {
+  const [input, setInput] = useState('')
+  const [error, setError] = useState(false)
+
+  const handleSubmit = (e) => {
+    e.preventDefault()
+    if (input === pin) { onUnlock() } else { setError(true); setInput('') }
+  }
+
+  return (
+    <div className="min-h-screen bg-cream dark:bg-stone-900 flex flex-col items-center justify-center px-8">
+      <div className="shadow-soft rounded-full mb-5">
+        <PlatedLogo size={72} dark={darkMode} />
+      </div>
+      <p className="font-semibold text-gray-900 dark:text-stone-50 mb-1">Admin PIN</p>
+      <p className="text-warm-400 dark:text-stone-500 text-sm mb-5">Enter the PIN to continue</p>
+      <form onSubmit={handleSubmit} className="w-full max-w-xs">
+        <input
+          type="password"
+          inputMode="numeric"
+          autoFocus
+          value={input}
+          onChange={(e) => { setInput(e.target.value.replace(/\D/g, '')); setError(false) }}
+          maxLength={8}
+          className={`w-full text-center tracking-[0.3em] px-3 py-3 bg-white dark:bg-stone-800 rounded-xl text-lg font-mono text-gray-900 dark:text-stone-100 outline-none focus:ring-2 focus:ring-primary/30 ${error ? 'ring-2 ring-rose-400' : ''}`}
+        />
+        {error && <p className="text-rose-500 text-xs text-center mt-2">Wrong PIN</p>}
+        <button type="submit" className="w-full mt-4 py-3 bg-primary text-white rounded-xl font-semibold text-sm active:scale-95 transition-all">
+          Unlock
+        </button>
+      </form>
+    </div>
+  )
+}
+
 export default function AdminScreen() {
   const navigate = useNavigate()
   const qc = useQueryClient()
   const { data: recipes = [] } = useRecipes()
   const [activeTab, setActiveTab] = useState('Usage')
+  const [unlocked, setUnlocked] = useState(false)
   const {
     aiCostLog, clearAiCostLog,
     aiEnabled, setAiEnabled,
@@ -526,10 +610,15 @@ export default function AdminScreen() {
     mealPlan,
     clearGroceryList, clearCookedDates,
     darkMode,
+    adminPin, setAdminPin,
   } = useAppStore()
 
   const aiCosts = calculateAiCosts(aiCostLog)
   const { clearAll: clearSharedGrocery } = useGrocery()
+
+  if (adminPin && !unlocked) {
+    return <PinGate pin={adminPin} onUnlock={() => setUnlocked(true)} darkMode={darkMode} />
+  }
 
   return (
     <div className="min-h-screen bg-cream dark:bg-stone-900">
@@ -589,6 +678,7 @@ export default function AdminScreen() {
             clearGroceryList={clearGroceryList}
             clearCookedDates={clearCookedDates}
             clearSharedGrocery={clearSharedGrocery}
+            adminPin={adminPin} setAdminPin={setAdminPin}
           />
         )}
       </div>

@@ -30,7 +30,7 @@ export function useCookLog(limit = 100) {
 
       const { data, error } = await supabase
         .from('made_it_log')
-        .select('id, user_id, recipe_id, rating, notes, created_at, recipes(id, title, thumbnail_url)')
+        .select('id, user_id, recipe_id, rating, notes, photo_url, created_at, recipes(id, title, thumbnail_url)')
         .order('created_at', { ascending: false })
         .limit(limit)
 
@@ -43,6 +43,7 @@ export function useCookLog(limit = 100) {
         recipeId: e.recipe_id,
         recipeTitle: e.recipes?.title || 'Unknown recipe',
         recipeThumbnail: e.recipes?.thumbnail_url || null,
+        photoUrl: e.photo_url || null,
         rating: e.rating,
         notes: e.notes,
       }))

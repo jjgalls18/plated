@@ -52,7 +52,8 @@ export function usePartner() {
   const joinWithCode = async (code) => {
     if (!user || !isSupabaseConfigured) throw new Error('Not connected')
 
-    const trimmed = code.trim().toLowerCase()
+    // Codes are generated uppercase (see below) — normalize input to match.
+    const trimmed = code.trim().toUpperCase()
 
     // Find the profile with this invite code
     const { data: otherProfile, error } = await supabase
