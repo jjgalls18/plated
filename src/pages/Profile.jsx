@@ -6,14 +6,16 @@ import { useRecipes } from '../hooks/useRecipes'
 import { usePartner } from '../hooks/usePartner'
 import { useGrocery } from '../hooks/useGrocery'
 import { useCookLog } from '../hooks/useCookLog'
+import { useCoupleStory } from '../hooks/useCoupleStory'
 import { isSupabaseConfigured } from '../lib/supabase'
 import toast from 'react-hot-toast'
 import {
   ChefHat, Flame, Star, ShoppingCart,
   LogOut, Check, ShoppingBag, Sun, Moon,
-  Copy, UserPlus, Link2, Link2Off, RotateCcw, X
+  Copy, UserPlus, Link2, Link2Off, RotateCcw, X, Pencil, BookHeart,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import ThumbnailPicker from '../components/ui/ThumbnailPicker'
 
 export default function Profile() {
   const { signOut, profile, updateProfile } = useAuth()
@@ -21,7 +23,7 @@ export default function Profile() {
   const { cookedDates, darkMode, setDarkMode } = useAppStore()
   const { items: groceryItems, toggleItem, clearChecked } = useGrocery()
   const { inviteCode, partner, joinWithCode, unlinkPartner } = usePartner()
-  const { entries } = useCookLog()
+  const { entries, myId, partnerId } = useCookLog()
   const [activeTab, setActiveTab] = useState('overview')
   const [joinCode, setJoinCode] = useState('')
   const [joining, setJoining] = useState(false)
@@ -53,6 +55,7 @@ export default function Profile() {
         <div className="flex bg-white dark:bg-stone-800 rounded-2xl shadow-card p-1">
           {[
             { id: 'overview', label: 'Overview' },
+            { id: 'story', label: 'Our Story' },
             { id: 'grocery', label: `Grocery${groceryItems.length > 0 ? ` (${groceryItems.length})` : ''}` },
             { id: 'settings', label: 'Settings' },
           ].map(({ id, label }) => (
@@ -183,6 +186,12 @@ export default function Profile() {
             </div>
           )}
 
+          {/* This month's competition */}
+          <CompetitionCard entries={entries} myId={myId} partnerId={partnerId} myName={profile?.display_name || 'You'} partnerName={partner?.display_name || 'Partner'} />
+
+          {/* Recent memories */}
+          <MemoriesCard entries={entries} />
+
           {/* Most Cooked */}
           <MostCookedCard entries={entries} recipes={recipes} />
 
@@ -199,6 +208,8 @@ export default function Profile() {
           </button>
         </div>
       )}
+
+      {activeTab === 'story' && <StoryTab />}
 
       {activeTab === 'grocery' && (
         <div className="px-5 space-y-4">
@@ -368,6 +379,175 @@ export default function Profile() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function StoryTab() {
+  const { story, save, saving } = useCoupleStory()
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  const [photoUrl, setPhotoUrl] = useState(null)
+
+  const startEdit = () => {
+    setDraft(story?.story || '')
+    setPhotoUrl(story?.photo_url || null)
+    setEditing(true)
+  }
+
+  const handleSave = async () => {
+    try {
+      await save({ story: draft.trim() || null, photo_url: photoUrl })
+      setEditing(false)
+      toast.success('Saved!')
+    } catch {
+      toast.error('Could not save')
+    }
+  }
+
+  if (!isSupabaseConfigured) {
+    return (
+      <div className="px-5">
+        <p className="text-sm text-warm-400 dark:text-stone-500 text-center py-16">
+          Our Story needs Supabase connected to sync between you two.
+        </p>
+      </div>
+    )
+  }
+
+  if (editing) {
+    return (
+      <div className="px-5 space-y-4">
+        <ThumbnailPicker url={photoUrl} onChange={setPhotoUrl} />
+        <textarea
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder="How'd you two meet? What's your story?"
+          rows={8}
+          className="w-full p-4 bg-white dark:bg-stone-800 rounded-2xl shadow-card text-sm text-gray-900 dark:text-stone-50 placeholder-warm-400 dark:placeholder-stone-500 outline-none resize-none focus:ring-2 focus:ring-primary/20"
+        />
+        <div className="flex gap-3">
+          <button
+            onClick={() => setEditing(false)}
+            className="flex-1 py-3 rounded-2xl bg-warm-100 dark:bg-stone-700 text-sm font-semibold text-gray-700 dark:text-stone-200"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex-1 py-3 rounded-2xl bg-primary text-sm font-semibold text-white disabled:opacity-60"
+          >
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  const hasContent = story?.story || story?.photo_url
+
+  return (
+    <div className="px-5 space-y-4">
+      {!hasContent ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <div className="w-16 h-16 rounded-3xl bg-primary-50 dark:bg-primary-900/20 flex items-center justify-center mb-4">
+            <BookHeart size={28} className="text-primary" />
+          </div>
+          <p className="font-semibold text-gray-700 dark:text-stone-300 mb-1">No story yet</p>
+          <p className="text-sm text-warm-400 dark:text-stone-500 mb-5">Write down how you two met, or anything worth remembering.</p>
+          <button
+            onClick={startEdit}
+            className="px-5 py-3 bg-primary text-white rounded-2xl font-semibold text-sm active:scale-95 transition-all"
+          >
+            Write our story
+          </button>
+        </div>
+      ) : (
+        <div className="bg-white dark:bg-stone-800 rounded-3xl shadow-card overflow-hidden">
+          {story.photo_url && (
+            <img src={story.photo_url} alt="Us" className="w-full aspect-[16/9] object-cover" />
+          )}
+          <div className="p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-display font-bold text-lg text-gray-900 dark:text-stone-50">Our Story</h3>
+              <button onClick={startEdit} className="flex items-center gap-1 text-xs font-semibold text-primary active:scale-95 transition-transform">
+                <Pencil size={12} />
+                Edit
+              </button>
+            </div>
+            {story.story && (
+              <p className="text-sm text-gray-700 dark:text-stone-300 leading-relaxed whitespace-pre-wrap">{story.story}</p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function CompetitionCard({ entries, myId, partnerId, myName, partnerName }) {
+  const monthStart = new Date()
+  monthStart.setDate(1)
+  const monthStartStr = monthStart.toISOString().split('T')[0]
+
+  const thisMonth = entries.filter((e) => e.date >= monthStartStr)
+  const myCooks = thisMonth.filter((e) => e.userId === myId).length
+  const partnerCooks = thisMonth.filter((e) => e.userId === partnerId).length
+  const leader = myCooks > partnerCooks ? myName : partnerCooks > myCooks ? partnerName : null
+  const monthLabel = monthStart.toLocaleDateString('en', { month: 'long' })
+
+  return (
+    <div className="bg-white dark:bg-stone-800 rounded-2xl shadow-card p-5">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-semibold text-gray-900 dark:text-stone-50">{monthLabel} competition</h3>
+        {leader && (
+          <div className="flex items-center gap-1 text-amber-500">
+            <Star size={12} className="fill-amber-500" />
+            <span className="text-[11px] font-bold">{leader} is winning</span>
+          </div>
+        )}
+      </div>
+      <div className="flex items-center gap-4">
+        <div className="flex-1 text-center">
+          <div className="w-14 h-14 bg-primary rounded-2xl flex items-center justify-center mx-auto mb-2 shadow-soft">
+            <span className="text-white font-bold text-xl">{myName[0]}</span>
+          </div>
+          <p className="font-bold text-3xl text-gray-900 dark:text-stone-50">{myCooks}</p>
+          <p className="text-xs text-warm-400 dark:text-stone-500 mt-0.5">{myName}</p>
+        </div>
+        <span className="text-xs font-bold text-warm-300 dark:text-stone-600">VS</span>
+        <div className="flex-1 text-center">
+          <div className="w-14 h-14 bg-sage rounded-2xl flex items-center justify-center mx-auto mb-2 shadow-soft">
+            <span className="text-white font-bold text-xl">{partnerName[0]}</span>
+          </div>
+          <p className="font-bold text-3xl text-gray-900 dark:text-stone-50">{partnerCooks}</p>
+          <p className="text-xs text-warm-400 dark:text-stone-500 mt-0.5">{partnerName}</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function MemoriesCard({ entries }) {
+  const withPhotos = entries.filter((e) => e.photoUrl).slice(0, 9)
+  if (withPhotos.length === 0) return null
+
+  return (
+    <div className="bg-white dark:bg-stone-800 rounded-2xl shadow-card p-5">
+      <h3 className="font-semibold text-gray-900 dark:text-stone-50 mb-4">Recent memories</h3>
+      <div className="grid grid-cols-3 gap-2">
+        {withPhotos.map((entry) => (
+          <Link
+            key={entry.id}
+            to={`/recipe/${entry.recipeId}`}
+            className="aspect-square rounded-xl overflow-hidden active:scale-95 transition-transform"
+          >
+            <img src={entry.photoUrl} alt={entry.recipeTitle} className="w-full h-full object-cover" />
+          </Link>
+        ))}
+      </div>
     </div>
   )
 }

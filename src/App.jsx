@@ -20,6 +20,8 @@ const RecipeDetail = lazy(() => import('./pages/RecipeDetail'))
 const CookingMode = lazy(() => import('./pages/CookingMode'))
 const MealPlan = lazy(() => import('./pages/MealPlan'))
 const Grocery = lazy(() => import('./pages/Grocery'))
+const ShopMode = lazy(() => import('./pages/ShopMode'))
+const Assistant = lazy(() => import('./pages/Assistant'))
 const Profile = lazy(() => import('./pages/Profile'))
 const AdminScreen = lazy(() => import('./pages/AdminScreen'))
 const EditRecipe = lazy(() => import('./pages/EditRecipe'))
@@ -37,6 +39,8 @@ function AppRoutes() {
         {/* Full-screen — no bottom nav */}
         <Route path="/recipe/:id/cook" element={<CookingMode />} />
         <Route path="/recipe/:id/edit" element={<EditRecipe />} />
+        <Route path="/grocery/shop" element={<ShopMode />} />
+        <Route path="/assistant" element={<Assistant />} />
         <Route path="/admin" element={<AdminScreen />} />
 
         {/* Standard shell routes */}

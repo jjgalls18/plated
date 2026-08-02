@@ -123,6 +123,15 @@ export function useGrocery() {
         .update({ checked: !checked })
         .eq('id', id)
       if (error) throw error
+
+      // Just bought it — if a pantry item shares this name, it's restocked.
+      if (!checked) {
+        const current = qc.getQueryData([...QUERY_KEY, user?.id]) || []
+        const item = current.find((i) => i.id === id)
+        if (item?.name) {
+          await supabase.from('pantry_items').update({ running_low: false }).ilike('name', item.name)
+        }
+      }
     },
     onMutate: async ({ id, checked }) => {
       await qc.cancelQueries({ queryKey: QUERY_KEY })

@@ -8,6 +8,7 @@ import {
 import { useAppStore, calculateAiCosts } from '../stores/useAppStore'
 import { useGrocery } from '../hooks/useGrocery'
 import { useRecipes } from '../hooks/useRecipes'
+import { useMealPlan } from '../hooks/useMealPlan'
 import { isSupabaseConfigured } from '../lib/supabase'
 import { MOCK_RECIPES } from '../data/mockRecipes'
 import PlatedLogo from '../components/ui/PlatedLogo'
@@ -607,11 +608,11 @@ export default function AdminScreen() {
     anthropicApiKey, setAnthropicApiKey,
     openaiApiKey, setOpenaiApiKey,
     groceryListsGenerated,
-    mealPlan,
     clearGroceryList, clearCookedDates,
     darkMode,
     adminPin, setAdminPin,
   } = useAppStore()
+  const { mealPlan } = useMealPlan()
 
   const aiCosts = calculateAiCosts(aiCostLog)
   const { clearAll: clearSharedGrocery } = useGrocery()

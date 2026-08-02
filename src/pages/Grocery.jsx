@@ -1,16 +1,22 @@
 import { useState, useRef } from 'react'
-import { ShoppingCart, Plus, Check, X, Share2, Pencil } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { ShoppingCart, Plus, Check, X, Share2, Pencil, ListChecks, AlertTriangle, Trash2, Package, ListTodo } from 'lucide-react'
 import { useGrocery } from '../hooks/useGrocery'
+import { usePantry } from '../hooks/usePantry'
 import { usePartner } from '../hooks/usePartner'
+import { isSupabaseConfigured } from '../lib/supabase'
 import { groupByCategory, getCategoryEmoji } from '../lib/grocery'
+import { buildTodoIcs, shareIcsFile } from '../lib/ics'
 import PageHeader from '../components/ui/PageHeader'
 import toast from 'react-hot-toast'
 
 export default function Grocery() {
+  const navigate = useNavigate()
   const { items, isLoading, myId, addItem, toggleItem, removeItem, updateItem, clearChecked, clearAll } = useGrocery()
   const { partner } = usePartner()
   const [newItem, setNewItem] = useState('')
   const [showClearConfirm, setShowClearConfirm] = useState(false)
+  const [tab, setTab] = useState('list')
 
   const unchecked = items.filter((i) => !i.checked)
   const checked = items.filter((i) => i.checked)
@@ -61,6 +67,13 @@ export default function Grocery() {
     }
   }
 
+  const handleSendToReminders = async () => {
+    if (!unchecked.length) return toast.error('Nothing to send')
+    const ics = buildTodoIcs(unchecked, { calName: 'Grocery List' })
+    const result = await shareIcsFile(ics, 'grocery-list.ics', 'Grocery List')
+    if (result === 'downloaded') toast.success('Downloaded — open it to add to Reminders')
+  }
+
   return (
     <div className="min-h-screen bg-cream dark:bg-stone-900">
       <PageHeader />
@@ -69,28 +82,56 @@ export default function Grocery() {
         {/* Title row */}
         <div className="flex items-center justify-between mb-5">
           <div>
-            <h1 className="font-display text-3xl font-bold text-gray-900 dark:text-stone-50">Grocery List</h1>
+            <h1 className="font-display text-3xl font-bold text-gray-900 dark:text-stone-50">
+              {tab === 'pantry' ? 'Pantry' : 'Grocery List'}
+            </h1>
             <p className="text-sm text-warm-400 dark:text-stone-500 mt-0.5">
-              {isLoading ? 'Loading…' : `${unchecked.length} item${unchecked.length !== 1 ? 's' : ''} to get`}
+              {tab === 'pantry'
+                ? 'What you keep stocked at home'
+                : (isLoading ? 'Loading…' : `${unchecked.length} item${unchecked.length !== 1 ? 's' : ''} to get`)}
               {partner && <span className="ml-1.5 text-primary font-medium">· shared with {partnerName}</span>}
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            {items.length > 0 && (
-              <button onClick={handleShare} className="p-2 text-warm-400 dark:text-stone-500 hover:text-primary transition-colors">
-                <Share2 size={18} />
-              </button>
-            )}
-            {items.length > 0 && (
-              <button
-                onClick={() => setShowClearConfirm(true)}
-                className="text-xs text-warm-400 dark:text-stone-500 hover:text-red-500 transition-colors font-medium"
-              >
-                Clear all
-              </button>
-            )}
-          </div>
+          {tab === 'list' && (
+            <div className="flex items-center gap-3">
+              {unchecked.length > 0 && (
+                <button onClick={handleSendToReminders} className="p-2 text-warm-400 dark:text-stone-500 hover:text-primary transition-colors" title="Send to Reminders">
+                  <ListTodo size={18} />
+                </button>
+              )}
+              {items.length > 0 && (
+                <button onClick={handleShare} className="p-2 text-warm-400 dark:text-stone-500 hover:text-primary transition-colors">
+                  <Share2 size={18} />
+                </button>
+              )}
+              {items.length > 0 && (
+                <button
+                  onClick={() => setShowClearConfirm(true)}
+                  className="text-xs text-warm-400 dark:text-stone-500 hover:text-red-500 transition-colors font-medium"
+                >
+                  Clear all
+                </button>
+              )}
+            </div>
+          )}
         </div>
+
+        {/* List / Pantry tabs */}
+        <div className="flex bg-white dark:bg-stone-800 rounded-2xl shadow-card p-1 mb-6">
+          {[['list', 'Grocery List'], ['pantry', 'Pantry']].map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setTab(key)}
+              className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-all ${
+                tab === key ? 'bg-primary text-white shadow-soft' : 'text-warm-400 dark:text-stone-500'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'pantry' ? <PantryTab addToGrocery={addItem} /> : <>
 
         {/* Add item form */}
         <form onSubmit={handleAdd} className="flex gap-2 mb-6">
@@ -108,6 +149,17 @@ export default function Grocery() {
             <Plus size={20} className="text-white" />
           </button>
         </form>
+
+        {/* Shop Mode entry */}
+        {unchecked.length > 0 && (
+          <button
+            onClick={() => navigate('/grocery/shop')}
+            className="w-full flex items-center justify-center gap-2 py-3.5 mb-6 bg-primary text-white rounded-2xl font-semibold text-sm shadow-soft active:scale-[0.98] transition-all"
+          >
+            <ListChecks size={17} />
+            Shop Mode
+          </button>
+        )}
 
         {/* Empty state */}
         {!isLoading && items.length === 0 && (
@@ -172,6 +224,7 @@ export default function Grocery() {
             </div>
           </div>
         )}
+        </>}
       </div>
 
       {/* Clear all confirm */}
@@ -278,6 +331,128 @@ function GroceryItem({ item, myId, partnerInitial, onToggle, onRemove, onUpdate 
       >
         <X size={15} />
       </button>
+    </div>
+  )
+}
+
+function PantryTab({ addToGrocery }) {
+  const { items, isLoading, addItem, toggleRunningLow, removeItem } = usePantry()
+  const [name, setName] = useState('')
+  const [qty, setQty] = useState('')
+
+  const groups = groupByCategory(items)
+  const runningLowCount = items.filter((i) => i.running_low).length
+
+  const handleAdd = async (e) => {
+    e.preventDefault()
+    const trimmed = name.trim()
+    if (!trimmed) return
+    await addItem({ name: trimmed, quantity: qty.trim() })
+    setName('')
+    setQty('')
+  }
+
+  const handleOutOfThat = async (item) => {
+    toggleRunningLow(item.id, item.running_low)
+    if (!item.running_low) {
+      await addToGrocery({ name: item.name })
+      toast.success(`Added ${item.name} to the grocery list`)
+    }
+  }
+
+  if (!isSupabaseConfigured) {
+    return (
+      <p className="text-sm text-warm-400 dark:text-stone-500 text-center py-16">
+        Pantry needs Supabase connected to sync between you two.
+      </p>
+    )
+  }
+
+  return (
+    <div>
+      <form onSubmit={handleAdd} className="flex gap-2 mb-4">
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Add a pantry item…"
+          className="flex-1 px-4 py-3 bg-white dark:bg-stone-800 rounded-2xl text-sm font-medium text-gray-900 dark:text-stone-50 placeholder-warm-400 dark:placeholder-stone-500 outline-none focus:ring-2 focus:ring-primary/30 shadow-card transition-all"
+        />
+        <input
+          type="text"
+          value={qty}
+          onChange={(e) => setQty(e.target.value)}
+          placeholder="Qty"
+          className="w-20 px-3 py-3 bg-white dark:bg-stone-800 rounded-2xl text-sm font-medium text-gray-900 dark:text-stone-50 placeholder-warm-400 dark:placeholder-stone-500 outline-none focus:ring-2 focus:ring-primary/30 shadow-card transition-all"
+        />
+        <button
+          type="submit"
+          className="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center shadow-soft active:scale-90 transition-transform flex-shrink-0"
+        >
+          <Plus size={20} className="text-white" />
+        </button>
+      </form>
+
+      {runningLowCount > 0 && (
+        <div className="flex items-center gap-2 mb-4 px-4 py-2.5 bg-amber-50 dark:bg-amber-900/20 rounded-xl">
+          <AlertTriangle size={14} className="text-amber-600 dark:text-amber-400 flex-shrink-0" />
+          <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+            {runningLowCount} item{runningLowCount !== 1 ? 's' : ''} running low
+          </p>
+        </div>
+      )}
+
+      {!isLoading && items.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <div className="w-16 h-16 rounded-3xl bg-warm-100 dark:bg-stone-800 flex items-center justify-center mb-4">
+            <Package size={28} className="text-warm-300 dark:text-stone-600" />
+          </div>
+          <p className="font-semibold text-gray-700 dark:text-stone-300 mb-1">Pantry's empty</p>
+          <p className="text-sm text-warm-400 dark:text-stone-500">Add what you keep stocked at home</p>
+        </div>
+      )}
+
+      {groups.map(({ cat, items: catItems }) => (
+        <div key={cat} className="mb-5">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-base">{getCategoryEmoji(cat)}</span>
+            <p className="text-xs font-semibold text-warm-400 dark:text-stone-500 uppercase tracking-wide">{cat}</p>
+          </div>
+          <div className="space-y-2">
+            {catItems.map((item) => (
+              <div
+                key={item.id}
+                className={`flex items-center gap-3 rounded-2xl px-4 py-3.5 shadow-card ${
+                  item.running_low ? 'bg-amber-50 dark:bg-amber-900/20' : 'bg-white dark:bg-stone-800'
+                }`}
+              >
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 dark:text-stone-50 truncate">{item.name}</p>
+                  {item.quantity && (
+                    <p className="text-xs text-warm-400 dark:text-stone-500 mt-0.5">{item.quantity}{item.unit ? ` ${item.unit}` : ''}</p>
+                  )}
+                </div>
+                <button
+                  onClick={() => handleOutOfThat(item)}
+                  className={`text-xs font-semibold px-3 py-1.5 rounded-full whitespace-nowrap active:scale-95 transition-all ${
+                    item.running_low
+                      ? 'bg-amber-500 text-white'
+                      : 'bg-warm-100 dark:bg-stone-700 text-warm-400 dark:text-stone-400'
+                  }`}
+                >
+                  {item.running_low ? 'Low — in cart' : "We're out"}
+                </button>
+                <button
+                  onClick={() => removeItem(item.id)}
+                  className="p-1.5 text-warm-300 dark:text-stone-600 hover:text-red-400 transition-colors active:scale-90"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   )
 }

@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import {
   Flame, Sun, Moon, ChefHat, Trophy, Shuffle,
   Heart, Clock, Zap, ArrowRight, CalendarDays,
+  Salad, Sparkles, Award, Users, Leaf, TrendingUp, Refrigerator,
 } from 'lucide-react'
 import { useRecipes } from '../hooks/useRecipes'
 import { useWeather } from '../hooks/useWeather'
@@ -10,6 +11,7 @@ import { useAppStore, calculateStreak } from '../stores/useAppStore'
 import { useAuth } from '../hooks/useAuth'
 import { usePartner } from '../hooks/usePartner'
 import { useCookLog } from '../hooks/useCookLog'
+import { useMealPlan } from '../hooks/useMealPlan'
 import PageHeader from '../components/ui/PageHeader'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -57,13 +59,38 @@ function getWeatherSuggestion(weather, recipes) {
   return { label, recipe: recipe ?? recipes[0] }
 }
 
+// Current-month season tags, computed once per page load — good enough since
+// nobody has this open across a season boundary.
+function getSeasonTags() {
+  const month = new Date().getMonth() // 0 = Jan
+  if (month === 11 || month <= 1) return ['winter', 'holiday', 'comfort', 'soup', 'stew']
+  if (month <= 4) return ['spring', 'fresh', 'salad']
+  if (month <= 7) return ['summer', 'grill', 'bbq', 'fresh']
+  return ['fall', 'autumn', 'roast', 'pumpkin']
+}
+const SEASON_TAGS = getSeasonTags()
+
 const DISCOVERY_CHIPS = [
   { label: 'Date Night', icon: Heart, color: 'bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-300',
     filter: (r) => r.tags?.includes('date night') },
   { label: 'Under 30 Min', icon: Clock, color: 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-300',
     filter: (r) => (r.prep_time || 0) + (r.cook_time || 0) <= 30 },
+  { label: "What's the Side", icon: Salad, color: 'bg-lime-100 text-lime-700 dark:bg-lime-900/30 dark:text-lime-300',
+    filter: (r) => r.tags?.some((t) => ['side', 'sides', 'side dish'].includes(t)) },
+  { label: 'Use What I Have', icon: Refrigerator, color: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300',
+    needsIngredients: true },
   { label: 'Low Effort', icon: Zap, color: 'bg-sage-100 text-sage-700 dark:bg-sage-900/20 dark:text-sage-300',
     filter: (r) => r.tags?.includes('low effort') || (r.prep_time || 99) <= 10 },
+  { label: 'Try Something New', icon: Sparkles, color: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300',
+    filter: (r) => !r.made_count },
+  { label: 'Cook the Classics', icon: Award, color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300',
+    filter: (r) => (r.made_count || 0) >= 2, sort: (a, b) => (b.made_count || 0) - (a.made_count || 0) },
+  { label: 'Last Minute Guests', icon: Users, color: 'bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/30 dark:text-fuchsia-300',
+    filter: (r) => r.tags?.includes('entertaining') || (r.servings || 0) >= 6 },
+  { label: 'Trending This Week', icon: TrendingUp, color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300',
+    needsTrending: true },
+  { label: 'Seasonal', icon: Leaf, color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
+    filter: (r) => r.tags?.some((t) => SEASON_TAGS.includes(t)) },
 ]
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -420,8 +447,9 @@ function WeatherCard({ weather, suggestion }) {
   )
 }
 
-function DiscoverySection({ recipes, navigate }) {
+function DiscoverySection({ recipes, navigate, entries }) {
   const [active, setActive] = useState(null)
+  const [ingredientQuery, setIngredientQuery] = useState('')
 
   const handleSurprise = () => {
     if (!recipes.length) return
@@ -429,9 +457,38 @@ function DiscoverySection({ recipes, navigate }) {
     navigate(`/recipe/${r.id}`)
   }
 
-  const filtered = active
-    ? recipes.filter(active.filter)
-    : []
+  const handleSelect = (chip) => {
+    setIngredientQuery('')
+    setActive(active?.label === chip.label ? null : chip)
+  }
+
+  // Recipes cooked in the last 7 days, ranked by how often — used by "Trending This Week"
+  const trendCounts = useMemo(() => {
+    const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0]
+    const counts = {}
+    entries.forEach((e) => {
+      if (e.date >= weekAgo) counts[e.recipeId] = (counts[e.recipeId] || 0) + 1
+    })
+    return counts
+  }, [entries])
+
+  const ingredientTerms = ingredientQuery.split(',').map((t) => t.trim().toLowerCase()).filter(Boolean)
+
+  let filtered = []
+  if (active?.needsTrending) {
+    filtered = recipes
+      .filter((r) => trendCounts[r.id] > 0)
+      .sort((a, b) => trendCounts[b.id] - trendCounts[a.id])
+  } else if (active?.needsIngredients) {
+    filtered = ingredientTerms.length
+      ? recipes.filter((r) => ingredientTerms.every((term) =>
+          r.ingredients?.some((ing) => ing.name?.toLowerCase().includes(term))
+        ))
+      : []
+  } else if (active) {
+    filtered = recipes.filter(active.filter)
+    if (active.sort) filtered = [...filtered].sort(active.sort)
+  }
 
   return (
     <div>
@@ -440,33 +497,52 @@ function DiscoverySection({ recipes, navigate }) {
       </p>
 
       {/* Chips */}
-      <div className="flex gap-2 mb-4">
+      <div className="flex gap-2 mb-4 overflow-x-auto scrollbar-hide pb-1 -mx-5 px-5">
         {/* Surprise Me — always navigates */}
         <button
           onClick={handleSurprise}
-          className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-semibold bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300 whitespace-nowrap transition-all active:scale-95"
+          className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-semibold bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300 whitespace-nowrap transition-all active:scale-95 flex-shrink-0"
         >
           <Shuffle size={12} />
           Surprise Me
         </button>
 
-        {DISCOVERY_CHIPS.map(({ label, icon: Icon, color, filter }) => (
-          <button
-            key={label}
-            onClick={() => setActive(active?.label === label ? null : { label, filter })}
-            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all active:scale-95 ${
-              active?.label === label ? 'bg-primary text-white shadow-soft' : color
-            }`}
-          >
-            <Icon size={12} />
-            {label}
-          </button>
-        ))}
+        {DISCOVERY_CHIPS.map((chip) => {
+          const { label, icon: Icon, color } = chip
+          return (
+            <button
+              key={label}
+              onClick={() => handleSelect(chip)}
+              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all active:scale-95 flex-shrink-0 ${
+                active?.label === label ? 'bg-primary text-white shadow-soft' : color
+              }`}
+            >
+              <Icon size={12} />
+              {label}
+            </button>
+          )
+        })}
       </div>
+
+      {/* "Use What I Have" needs an ingredient list before it can filter anything */}
+      {active?.needsIngredients && (
+        <input
+          type="text"
+          autoFocus
+          value={ingredientQuery}
+          onChange={(e) => setIngredientQuery(e.target.value)}
+          placeholder="What's in the fridge? e.g. chicken, spinach"
+          className="w-full mb-3 px-4 py-2.5 bg-white dark:bg-stone-800 rounded-xl text-sm text-gray-900 dark:text-stone-50 placeholder-warm-400 dark:placeholder-stone-500 outline-none focus:ring-2 focus:ring-primary/30 shadow-card"
+        />
+      )}
 
       {/* Results */}
       {active && (
-        filtered.length === 0 ? (
+        (active.needsIngredients && !ingredientTerms.length) ? (
+          <p className="text-sm text-warm-400 dark:text-stone-500 text-center py-4">
+            Type an ingredient or two to find recipes that use them.
+          </p>
+        ) : filtered.length === 0 ? (
           <p className="text-sm text-warm-400 dark:text-stone-500 text-center py-4">
             No recipes match this filter yet.
           </p>
@@ -497,7 +573,8 @@ export default function Home() {
   const { partner } = usePartner()
   const { data: recipes = [] } = useRecipes()
   const { weather } = useWeather()
-  const { darkMode, setDarkMode, mealPlan } = useAppStore()
+  const { darkMode, setDarkMode } = useAppStore()
+  const { mealPlan } = useMealPlan()
   const { entries, myId, partnerId, cookDates } = useCookLog()
   const streak = calculateStreak(cookDates)
 
@@ -572,6 +649,20 @@ export default function Home() {
           <WeatherCard weather={weather} suggestion={weatherSuggestion} />
         )}
 
+        <Link
+          to="/assistant"
+          className="flex items-center gap-3 bg-white dark:bg-stone-800 rounded-2xl shadow-card p-4 active:scale-[0.98] transition-transform"
+        >
+          <div className="w-10 h-10 rounded-2xl bg-violet-50 dark:bg-violet-900/30 flex items-center justify-center flex-shrink-0">
+            <Sparkles size={18} className="text-violet-600 dark:text-violet-400" />
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-gray-900 dark:text-stone-50">Cooking Assistant</p>
+            <p className="text-xs text-warm-400 dark:text-stone-500">Ask what to make, get substitutions, fix a recipe gone wrong</p>
+          </div>
+          <ArrowRight size={16} className="text-warm-300 dark:text-stone-600 flex-shrink-0" />
+        </Link>
+
         {/* Quick stats */}
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-white dark:bg-stone-800 rounded-2xl shadow-card p-4 text-center">
@@ -620,7 +711,7 @@ export default function Home() {
           </div>
         )}
 
-        <DiscoverySection recipes={recipes} navigate={navigate} />
+        <DiscoverySection recipes={recipes} navigate={navigate} entries={entries} />
       </div>
     </div>
   )

@@ -1,16 +1,20 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
   ArrowLeft, Clock, Users, Star, ChefHat, ShoppingCart,
   Minus, Plus, Trash2, Check, Share2, Play, Pencil,
-  Globe, ExternalLink, X
+  Globe, ExternalLink, X, Heart, Repeat, Sparkles
 } from 'lucide-react'
-import { useRecipe, useLogMadeIt, useDeleteRecipe, useSimilarRecipes } from '../hooks/useRecipes'
+import { useRecipe, useLogMadeIt, useDeleteRecipe, useUpdateRecipe, useSimilarRecipes } from '../hooks/useRecipes'
 import { useGrocery } from '../hooks/useGrocery'
 import { useAppStore } from '../stores/useAppStore'
 import { useAuth } from '../hooks/useAuth'
 import ThumbnailPicker from '../components/ui/ThumbnailPicker'
+import { authHeaders } from '../lib/extraction'
+import { computeCost } from '../lib/aiCost'
 import toast from 'react-hot-toast'
+
+const SUBSTITUTE_MODEL = 'claude-haiku-4-5-20251001'
 
 function PlatformIcon({ size = 15, platform }) {
   if (platform === 'tiktok') return (
@@ -53,7 +57,9 @@ export default function RecipeDetail() {
   const { data: recipe, isLoading } = useRecipe(id)
   const logMadeIt = useLogMadeIt()
   const deleteRecipe = useDeleteRecipe()
-  const { logCook, incrementGroceryListsGenerated } = useAppStore()
+  const updateRecipe = useUpdateRecipe()
+  const { logCook, incrementGroceryListsGenerated, anthropicApiKey, aiEnabled, logAiCost } = useAppStore()
+  const [substituteFor, setSubstituteFor] = useState(null)
   const { profile } = useAuth()
   const { addItems } = useGrocery()
 
@@ -166,6 +172,12 @@ export default function RecipeDetail() {
         </button>
 
         <div className="absolute top-14 right-5 flex gap-2">
+          <button
+            onClick={() => updateRecipe.mutate({ id: recipe.id, is_favorite: !recipe.is_favorite })}
+            className="w-9 h-9 bg-white/90 dark:bg-stone-900/90 rounded-full flex items-center justify-center shadow-soft backdrop-blur-sm"
+          >
+            <Heart size={15} className={recipe.is_favorite ? 'text-primary fill-primary' : 'text-gray-800 dark:text-stone-100'} />
+          </button>
           <button
             onClick={handleShare}
             className="w-9 h-9 bg-white/90 dark:bg-stone-900/90 rounded-full flex items-center justify-center shadow-soft backdrop-blur-sm"
@@ -320,6 +332,13 @@ export default function RecipeDetail() {
                   <div className="w-1.5 h-1.5 bg-primary rounded-full flex-shrink-0" />
                   <span className="text-sm text-warm-400 dark:text-stone-400 font-medium min-w-[4rem]">{scaleAmount(ing.amount)}</span>
                   <span className="text-sm text-gray-900 dark:text-stone-100 flex-1">{ing.name}</span>
+                  <button
+                    onClick={() => setSubstituteFor(ing.name)}
+                    className="p-1.5 text-warm-300 dark:text-stone-600 hover:text-primary transition-colors flex-shrink-0"
+                    title="Find a substitute"
+                  >
+                    <Repeat size={14} />
+                  </button>
                 </div>
               ))}
             </div>
@@ -402,6 +421,18 @@ export default function RecipeDetail() {
         />
       )}
 
+      {/* Ingredient substitute */}
+      {substituteFor && (
+        <SubstituteModal
+          ingredient={substituteFor}
+          recipeTitle={recipe.title}
+          apiKey={anthropicApiKey}
+          aiEnabled={aiEnabled}
+          logAiCost={logAiCost}
+          onClose={() => setSubstituteFor(null)}
+        />
+      )}
+
       {/* Delete confirm */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black/50 flex items-end z-50 px-4 pb-nav" onClick={() => setShowDeleteConfirm(false)}>
@@ -427,6 +458,81 @@ export default function RecipeDetail() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function SubstituteModal({ ingredient, recipeTitle, apiKey, aiEnabled, logAiCost, onClose }) {
+  const [loading, setLoading] = useState(true)
+  const [answer, setAnswer] = useState('')
+
+  useEffect(() => {
+    if (!apiKey || !aiEnabled) { setLoading(false); return }
+    let cancelled = false
+
+    ;(async () => {
+      try {
+        const res = await fetch('/api/anthropic', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', ...(await authHeaders()) },
+          body: JSON.stringify({
+            apiKey,
+            model: SUBSTITUTE_MODEL,
+            max_tokens: 300,
+            messages: [{
+              role: 'user',
+              content: `In the recipe "${recipeTitle}", suggest 1-3 good substitutes for "${ingredient}". Be brief and practical — note any adjustment needed (ratio, technique). Plain text, no markdown.`,
+            }],
+          }),
+        })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}))
+          throw new Error(err.error?.message || 'Could not get a substitute')
+        }
+        const data = await res.json()
+        if (cancelled) return
+        logAiCost?.(computeCost(SUBSTITUTE_MODEL, data.usage), 'substitution')
+        setAnswer(data.content?.[0]?.text?.trim() || 'No suggestion came back — try again.')
+      } catch (err) {
+        if (!cancelled) setAnswer(err.message || 'Something went wrong.')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+
+    return () => { cancelled = true }
+  }, [ingredient, recipeTitle, apiKey, aiEnabled, logAiCost])
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-end z-50" onClick={onClose}>
+      <div className="bg-white dark:bg-stone-800 rounded-t-3xl p-6 w-full animate-fade-up" onClick={(e) => e.stopPropagation()}>
+        <div className="w-10 h-1 bg-warm-200 dark:bg-stone-600 rounded-full mx-auto mb-5" />
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-9 h-9 rounded-2xl bg-primary-50 dark:bg-primary-900/20 flex items-center justify-center flex-shrink-0">
+            <Repeat size={16} className="text-primary" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-gray-900 dark:text-stone-50">Substitute for {ingredient}</h3>
+          </div>
+        </div>
+
+        {!apiKey || !aiEnabled ? (
+          <p className="text-sm text-warm-400 dark:text-stone-400 mb-5">
+            {aiEnabled ? 'Add your Anthropic API key first (tap logo 5× for admin).' : 'AI is turned off — enable it in admin settings (tap logo 5×).'}
+          </p>
+        ) : loading ? (
+          <div className="flex items-center gap-2 py-4 mb-5">
+            <Sparkles size={14} className="text-primary animate-pulse" />
+            <p className="text-sm text-warm-400 dark:text-stone-500">Thinking…</p>
+          </div>
+        ) : (
+          <p className="text-sm text-gray-700 dark:text-stone-300 leading-relaxed mb-5 whitespace-pre-wrap">{answer}</p>
+        )}
+
+        <button onClick={onClose} className="w-full py-3 rounded-2xl bg-warm-100 dark:bg-stone-700 text-sm font-semibold text-gray-700 dark:text-stone-200">
+          Close
+        </button>
+      </div>
     </div>
   )
 }

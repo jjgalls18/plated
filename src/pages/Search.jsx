@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react'
-import { ArrowLeft, Search as SearchIcon, X } from 'lucide-react'
+import { ArrowLeft, Search as SearchIcon, X, Globe } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useRecipes } from '../hooks/useRecipes'
+import { useAppStore } from '../stores/useAppStore'
 import RecipeCard, { RecipeCardSkeleton } from '../components/ui/RecipeCard'
 
 function searchRecipes(recipes, query, activeTag) {
@@ -28,7 +29,9 @@ function searchRecipes(recipes, query, activeTag) {
 export default function Search() {
   const [query, setQuery] = useState('')
   const [activeTag, setActiveTag] = useState(null)
+  const [showWebSearch, setShowWebSearch] = useState(false)
   const { data: recipes = [], isLoading } = useRecipes()
+  const { aiEnabled, anthropicApiKey } = useAppStore()
 
   // Derive tag chips from actual recipe data, sorted by frequency
   const tagChips = useMemo(() => {
@@ -121,7 +124,47 @@ export default function Search() {
             </div>
           </>
         )}
+
+        {query && (
+          <button
+            onClick={() => setShowWebSearch(true)}
+            className="w-full flex items-center gap-3 mt-4 p-4 bg-white dark:bg-stone-800 rounded-2xl shadow-card text-left active:scale-[0.98] transition-transform"
+          >
+            <div className="w-9 h-9 rounded-2xl bg-sky-50 dark:bg-sky-900/20 flex items-center justify-center flex-shrink-0">
+              <Globe size={16} className="text-sky-600 dark:text-sky-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-gray-900 dark:text-stone-50">Search the internet instead</p>
+              <p className="text-xs text-warm-400 dark:text-stone-500">Find "{query}" recipes beyond your saved collection</p>
+            </div>
+          </button>
+        )}
       </div>
+
+      {showWebSearch && (
+        <div className="fixed inset-0 bg-black/50 flex items-end z-50" onClick={() => setShowWebSearch(false)}>
+          <div className="bg-white dark:bg-stone-800 rounded-t-3xl p-6 w-full" onClick={(e) => e.stopPropagation()}>
+            <div className="w-10 h-1 bg-warm-200 dark:bg-stone-600 rounded-full mx-auto mb-5" />
+            <div className="w-12 h-12 rounded-2xl bg-sky-50 dark:bg-sky-900/20 flex items-center justify-center mb-4">
+              <Globe size={22} className="text-sky-600 dark:text-sky-400" />
+            </div>
+            <h3 className="font-semibold text-gray-900 dark:text-stone-50 text-lg mb-1.5">Internet recipe search</h3>
+            <p className="text-sm text-warm-400 dark:text-stone-400 mb-5 leading-relaxed">
+              Coming soon — search the web for recipes and save any of them straight to your collection,
+              the same way pasting a link already works today.
+              {!aiEnabled || !anthropicApiKey
+                ? ' Needs an Anthropic API key and AI turned on in admin settings first.'
+                : ''}
+            </p>
+            <button
+              onClick={() => setShowWebSearch(false)}
+              className="w-full py-3.5 bg-warm-100 dark:bg-stone-700 text-gray-700 dark:text-stone-200 rounded-2xl font-semibold text-sm"
+            >
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -1,21 +1,24 @@
 -- Plated - Supabase Schema
 -- Full rebuild reference. Run in Supabase SQL editor on a fresh project.
--- For existing projects, run supabase/migrations/20260519_security_grants.sql instead.
+-- For existing projects, run everything under supabase/migrations/ in order instead.
 
 create extension if not exists "uuid-ossp";
 
 -- ─── Tables ───────────────────────────────────────────────────────────────────
 
 create table public.profiles (
-  id            uuid references auth.users(id) on delete cascade primary key,
-  display_name  text,
-  avatar_url    text,
-  partner_id    uuid references auth.users(id),
-  invite_code   text unique,
-  ai_enabled    boolean default false,
-  streak        integer default 0,
-  created_at    timestamptz default now()
+  id             uuid references auth.users(id) on delete cascade primary key,
+  display_name   text,
+  avatar_url     text,
+  partner_id     uuid references auth.users(id),
+  invite_code    text unique,
+  ai_enabled     boolean default false,
+  streak         integer default 0,
+  calendar_token uuid not null default gen_random_uuid(),
+  created_at     timestamptz default now()
 );
+
+create unique index profiles_calendar_token_idx on public.profiles (calendar_token);
 
 create table public.recipes (
   id            uuid default gen_random_uuid() primary key,
@@ -31,6 +34,7 @@ create table public.recipes (
   servings      integer default 4,
   rating        integer check (rating >= 1 and rating <= 5),
   made_count    integer default 0,
+  is_favorite   boolean not null default false,
   created_by    uuid references auth.users(id),
   created_at    timestamptz default now(),
   updated_at    timestamptz default now()
@@ -73,7 +77,16 @@ create table public.meal_plans (
   day_of_week  integer not null check (day_of_week >= 0 and day_of_week <= 6),
   meal_type    text not null default 'dinner',
   recipe_id    uuid references public.recipes(id) on delete cascade,
-  created_at   timestamptz default now()
+  created_at   timestamptz default now(),
+  unique (week_start, day_of_week, meal_type)
+);
+
+-- Singleton "About Us" content — one shared row for the whole household.
+create table public.couple_story (
+  id         uuid primary key default gen_random_uuid(),
+  photo_url  text,
+  story      text,
+  updated_at timestamptz default now()
 );
 
 -- ─── Functions ────────────────────────────────────────────────────────────────
@@ -101,6 +114,7 @@ grant select, insert, update, delete on public.made_it_log    to authenticated;
 grant select, insert, update, delete on public.grocery_items  to authenticated;
 grant select, insert, update, delete on public.pantry_items   to authenticated;
 grant select, insert, update, delete on public.meal_plans     to authenticated;
+grant select, insert, update, delete on public.couple_story   to authenticated;
 
 -- ─── Function grants ──────────────────────────────────────────────────────────
 
@@ -114,6 +128,7 @@ alter table public.made_it_log    enable row level security;
 alter table public.grocery_items  enable row level security;
 alter table public.pantry_items   enable row level security;
 alter table public.meal_plans     enable row level security;
+alter table public.couple_story   enable row level security;
 
 -- Profiles: reads are open to all authenticated users (partner lookups, cook log
 -- display names, invite-code joins all query other users' rows). Writes are
@@ -159,4 +174,7 @@ create policy "Linked partners full access" on public.pantry_items
   for all to authenticated using (public.is_linked_partner()) with check (public.is_linked_partner());
 
 create policy "Linked partners full access" on public.meal_plans
+  for all to authenticated using (public.is_linked_partner()) with check (public.is_linked_partner());
+
+create policy "Linked partners full access" on public.couple_story
   for all to authenticated using (public.is_linked_partner()) with check (public.is_linked_partner());

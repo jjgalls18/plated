@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { Search as SearchIcon, X, Plus, Shuffle } from 'lucide-react'
+import { Search as SearchIcon, X, Plus, Shuffle, BookHeart } from 'lucide-react'
 import { useRecipes } from '../hooks/useRecipes'
-import RecipeCard, { RecipeCardSkeleton } from '../components/ui/RecipeCard'
+import RecipeCard, { RecipeCardHero, RecipeCardSkeleton } from '../components/ui/RecipeCard'
 import PageHeader from '../components/ui/PageHeader'
 
 const FILTER_TAGS = [
@@ -23,12 +23,16 @@ export default function Recipes() {
   const [searchParams] = useSearchParams()
   const [query, setQuery] = useState('')
   const [activeTag, setActiveTag] = useState(() => tagFromFilter(searchParams.get('filter')))
+  const [view, setView] = useState('all') // 'all' | 'cookbook'
 
   const { data: recipes = [], isLoading } = useRecipes(query)
 
-  const displayed = activeTag
-    ? recipes.filter((r) => r.tags?.includes(activeTag))
-    : recipes
+  const favorites = recipes.filter((r) => r.is_favorite)
+  const displayed = view === 'cookbook'
+    ? favorites
+    : activeTag
+      ? recipes.filter((r) => r.tags?.includes(activeTag))
+      : recipes
 
   const handleSurprise = () => {
     if (!recipes.length) return
@@ -90,24 +94,43 @@ export default function Recipes() {
         </div>
       </div>
 
-      {/* Filter tags */}
+      {/* All / Our Cookbook */}
       <div className="px-5 mb-5">
-        <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
-          {FILTER_TAGS.map((tag) => (
+        <div className="flex bg-white dark:bg-stone-800 rounded-2xl shadow-card p-1">
+          {[['all', 'All Recipes'], ['cookbook', `Our Cookbook${favorites.length ? ` (${favorites.length})` : ''}`]].map(([key, label]) => (
             <button
-              key={tag}
-              onClick={() => setActiveTag(activeTag === tag ? null : tag)}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all active:scale-95 capitalize ${
-                activeTag === tag
-                  ? 'bg-primary text-white shadow-soft'
-                  : 'bg-white dark:bg-stone-800 text-warm-400 dark:text-stone-400 shadow-card'
+              key={key}
+              onClick={() => setView(key)}
+              className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-all ${
+                view === key ? 'bg-primary text-white shadow-soft' : 'text-warm-400 dark:text-stone-500'
               }`}
             >
-              {tag}
+              {label}
             </button>
           ))}
         </div>
       </div>
+
+      {/* Filter tags */}
+      {view === 'all' && (
+        <div className="px-5 mb-5">
+          <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
+            {FILTER_TAGS.map((tag) => (
+              <button
+                key={tag}
+                onClick={() => setActiveTag(activeTag === tag ? null : tag)}
+                className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all active:scale-95 capitalize ${
+                  activeTag === tag
+                    ? 'bg-primary text-white shadow-soft'
+                    : 'bg-white dark:bg-stone-800 text-warm-400 dark:text-stone-400 shadow-card'
+                }`}
+              >
+                {tag}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Results */}
       <div className="px-5 pb-4">
@@ -116,21 +139,35 @@ export default function Recipes() {
             {[1, 2, 3, 4].map((i) => <RecipeCardSkeleton key={i} />)}
           </div>
         ) : displayed.length === 0 ? (
-          <div className="text-center py-16">
-            <p className="text-4xl mb-3">🔍</p>
-            <p className="font-semibold text-gray-700 dark:text-stone-200 mb-1">No results</p>
-            <p className="text-warm-400 dark:text-stone-500 text-sm">
-              {query ? `Nothing matched "${query}"` : 'Try a different filter'}
-            </p>
-            {recipes.length === 0 && (
-              <Link
-                to="/add"
-                className="inline-flex items-center gap-2 mt-4 bg-primary text-white font-semibold px-5 py-2.5 rounded-2xl text-sm shadow-soft"
-              >
-                <Plus size={15} />
-                Add your first recipe
-              </Link>
-            )}
+          view === 'cookbook' ? (
+            <div className="text-center py-16">
+              <BookHeart size={36} className="text-warm-300 dark:text-stone-600 mx-auto mb-3" />
+              <p className="font-semibold text-gray-700 dark:text-stone-200 mb-1">Nothing favorited yet</p>
+              <p className="text-warm-400 dark:text-stone-500 text-sm">Tap the heart on any recipe to add it to your cookbook.</p>
+            </div>
+          ) : (
+            <div className="text-center py-16">
+              <p className="text-4xl mb-3">🔍</p>
+              <p className="font-semibold text-gray-700 dark:text-stone-200 mb-1">No results</p>
+              <p className="text-warm-400 dark:text-stone-500 text-sm">
+                {query ? `Nothing matched "${query}"` : 'Try a different filter'}
+              </p>
+              {recipes.length === 0 && (
+                <Link
+                  to="/add"
+                  className="inline-flex items-center gap-2 mt-4 bg-primary text-white font-semibold px-5 py-2.5 rounded-2xl text-sm shadow-soft"
+                >
+                  <Plus size={15} />
+                  Add your first recipe
+                </Link>
+              )}
+            </div>
+          )
+        ) : view === 'cookbook' ? (
+          <div className="space-y-4">
+            {displayed.map((recipe) => (
+              <RecipeCardHero key={recipe.id} recipe={recipe} />
+            ))}
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3">

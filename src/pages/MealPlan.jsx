@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
-import { ChevronLeft, ChevronRight, X, ChefHat, ShoppingCart, Search, List, CalendarDays } from 'lucide-react'
+import { ChevronLeft, ChevronRight, X, ChefHat, ShoppingCart, Search, List, CalendarDays, CalendarPlus, Copy, Check } from 'lucide-react'
+import { useAuth } from '../hooks/useAuth'
 import { Link } from 'react-router-dom'
 import {
   DndContext, DragOverlay,
@@ -10,6 +11,7 @@ import {
 import { useAppStore } from '../stores/useAppStore'
 import { useRecipes } from '../hooks/useRecipes'
 import { useGrocery } from '../hooks/useGrocery'
+import { useMealPlan } from '../hooks/useMealPlan'
 import PageHeader from '../components/ui/PageHeader'
 import toast from 'react-hot-toast'
 
@@ -110,8 +112,11 @@ export default function MealPlan() {
   const [pickerState, setPickerState] = useState(null) // { date, slot }
   const [selectedDay, setSelectedDay] = useState(null)
   const [activeDrag, setActiveDrag] = useState(null)   // { id, recipe }
+  const [showCalendarModal, setShowCalendarModal] = useState(false)
 
-  const { mealPlan, setMealPlan, removeMealPlan, incrementGroceryListsGenerated } = useAppStore()
+  const { profile } = useAuth()
+  const { incrementGroceryListsGenerated } = useAppStore()
+  const { mealPlan, setMealPlan, removeMealPlan } = useMealPlan()
   const { data: recipes = [] } = useRecipes()
   const { addItems } = useGrocery()
 
@@ -197,15 +202,23 @@ export default function MealPlan() {
               {view === 'list' ? formatWeekRange(weekDates) : calMonthLabel}
             </p>
           </div>
-          {view === 'list' && (
+          <div className="flex items-center gap-2">
             <button
-              onClick={handleAddToGrocery}
-              className="flex items-center gap-1.5 px-3 py-2 bg-white dark:bg-stone-800 rounded-xl shadow-card text-xs font-semibold text-gray-700 dark:text-stone-200 active:scale-95 transition-transform"
+              onClick={() => setShowCalendarModal(true)}
+              className="w-9 h-9 flex items-center justify-center bg-white dark:bg-stone-800 rounded-xl shadow-card text-gray-700 dark:text-stone-200 active:scale-95 transition-transform flex-shrink-0"
             >
-              <ShoppingCart size={13} />
-              Add week
+              <CalendarPlus size={15} />
             </button>
-          )}
+            {view === 'list' && (
+              <button
+                onClick={handleAddToGrocery}
+                className="flex items-center gap-1.5 px-3 py-2 bg-white dark:bg-stone-800 rounded-xl shadow-card text-xs font-semibold text-gray-700 dark:text-stone-200 active:scale-95 transition-transform"
+              >
+                <ShoppingCart size={13} />
+                Add week
+              </button>
+            )}
+          </div>
         </div>
 
         {/* View toggle */}
@@ -425,6 +438,73 @@ export default function MealPlan() {
           onClose={() => setPickerState(null)}
         />
       )}
+
+      {/* Apple Calendar subscribe */}
+      {showCalendarModal && (
+        <CalendarSubscribeModal token={profile?.calendar_token} onClose={() => setShowCalendarModal(false)} />
+      )}
+    </div>
+  )
+}
+
+function CalendarSubscribeModal({ token, onClose }) {
+  const [copied, setCopied] = useState(false)
+  const host = typeof window !== 'undefined' ? window.location.host : ''
+  const httpsUrl = token ? `https://${host}/api/calendar/${token}.ics` : null
+  const webcalUrl = token ? `webcal://${host}/api/calendar/${token}.ics` : null
+
+  const handleCopy = async () => {
+    if (!httpsUrl) return
+    await navigator.clipboard.writeText(httpsUrl)
+    setCopied(true)
+    toast.success('Link copied')
+    setTimeout(() => setCopied(false), 1600)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 pb-10 px-5" onClick={onClose}>
+      <div className="w-full max-w-sm bg-white dark:bg-stone-800 rounded-3xl p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-10 h-10 rounded-2xl bg-primary-50 dark:bg-primary-900/20 flex items-center justify-center">
+            <CalendarPlus size={18} className="text-primary" />
+          </div>
+          <h3 className="font-semibold text-gray-900 dark:text-stone-50 text-lg">Apple Calendar</h3>
+        </div>
+
+        {!token ? (
+          <p className="text-sm text-warm-400 dark:text-stone-400 mb-5">
+            Calendar sync isn't set up yet — check back after the next update.
+          </p>
+        ) : (
+          <>
+            <p className="text-sm text-warm-400 dark:text-stone-400 mb-5 leading-relaxed">
+              Subscribe once and your meal plan stays in sync — new meals show up automatically,
+              no re-importing. On iPhone, tap below to open it directly in Calendar.
+            </p>
+            <a
+              href={webcalUrl}
+              className="w-full flex items-center justify-center gap-2 py-3.5 bg-primary text-white rounded-2xl font-semibold text-sm shadow-soft active:scale-95 transition-all mb-3"
+            >
+              <CalendarPlus size={16} />
+              Subscribe in Calendar
+            </a>
+            <button
+              onClick={handleCopy}
+              className="w-full flex items-center justify-center gap-2 py-3 bg-warm-100 dark:bg-stone-700 text-gray-700 dark:text-stone-200 rounded-2xl font-semibold text-xs active:scale-95 transition-all mb-1"
+            >
+              {copied ? <Check size={13} /> : <Copy size={13} />}
+              {copied ? 'Copied' : 'Copy link instead'}
+            </button>
+            <p className="text-[11px] text-warm-400 dark:text-stone-500 text-center mb-4">
+              Or paste manually: Settings → Calendar → Accounts → Add Subscribed Calendar
+            </p>
+          </>
+        )}
+
+        <button onClick={onClose} className="w-full py-3 rounded-2xl bg-warm-100 dark:bg-stone-700 text-sm font-semibold text-gray-700 dark:text-stone-200">
+          Close
+        </button>
+      </div>
     </div>
   )
 }

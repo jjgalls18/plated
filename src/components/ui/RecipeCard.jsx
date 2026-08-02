@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
-import { Clock, Star, ChefHat } from 'lucide-react'
+import { Clock, Star, ChefHat, Heart } from 'lucide-react'
+import { useUpdateRecipe } from '../../hooks/useRecipes'
 
 function getGradient(title = '') {
   const gradients = [
@@ -33,6 +34,13 @@ function StarRating({ rating }) {
 export default function RecipeCard({ recipe }) {
   const totalTime = (recipe.prep_time || 0) + (recipe.cook_time || 0)
   const gradient = getGradient(recipe.title)
+  const updateRecipe = useUpdateRecipe()
+
+  const toggleFavorite = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    updateRecipe.mutate({ id: recipe.id, is_favorite: !recipe.is_favorite })
+  }
 
   return (
     <Link to={`/recipe/${recipe.id}`} className="block">
@@ -51,6 +59,12 @@ export default function RecipeCard({ recipe }) {
             </div>
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
+          <button
+            onClick={toggleFavorite}
+            className="absolute top-3 left-3 w-7 h-7 rounded-full bg-black/40 flex items-center justify-center active:scale-90 transition-transform"
+          >
+            <Heart size={13} className={recipe.is_favorite ? 'text-primary fill-primary' : 'text-white'} />
+          </button>
           {recipe.made_count > 0 && (
             <div className="absolute top-3 right-3 bg-white/90 dark:bg-stone-900/90 rounded-full px-2.5 py-1 flex items-center gap-1">
               <ChefHat size={11} className="text-primary" />
