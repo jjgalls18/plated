@@ -9,6 +9,21 @@ import { computeCost } from './aiCost'
 
 const VIDEO_HOSTS = ['tiktok.com', 'instagram.com', 'youtube.com', 'youtu.be', 'reels']
 
+// API error shapes vary (a plain string, {message}, or occasionally something
+// stranger out of Claude's own generated JSON) — never let a non-string value
+// reach `new Error(...)`, or React renders it as the useless "[object Object]".
+export function errorText(value, fallback) {
+  if (typeof value === 'string' && value.trim()) return value
+  if (value && typeof value === 'object') {
+    if (typeof value.message === 'string' && value.message.trim()) return value.message
+    try {
+      const json = JSON.stringify(value)
+      if (json && json !== '{}') return json
+    } catch { /* fall through to fallback */ }
+  }
+  return fallback
+}
+
 // /api/fetch-page and /api/transcribe proxy arbitrary outbound requests — require
 // a valid Supabase session so the endpoints aren't a public open proxy.
 export async function authHeaders() {
@@ -58,7 +73,7 @@ export async function extractFromVideo(url, { anthropicApiKey, openaiApiKey, onS
 
   if (!transcribeRes.ok) {
     const err = await transcribeRes.json().catch(() => ({}))
-    throw new Error(err.error || 'Failed to transcribe video')
+    throw new Error(errorText(err.error, 'Failed to transcribe video'))
   }
 
   const { transcript } = await transcribeRes.json()
@@ -95,7 +110,7 @@ export async function extractFromWeb(url, { anthropicApiKey, onStep, savedRecipe
 
   if (!fetchRes.ok) {
     const err = await fetchRes.json().catch(() => ({}))
-    throw new Error(err.error || 'Failed to fetch page')
+    throw new Error(errorText(err.error, 'Failed to fetch page'))
   }
 
   const { text } = await fetchRes.json()
@@ -194,7 +209,7 @@ ${text.slice(0, 7000)}`,
 
   if (!response.ok) {
     const err = await response.json().catch(() => ({}))
-    throw new Error(err.error?.message || 'Claude API error')
+    throw new Error(errorText(err.error, 'Claude API error'))
   }
 
   const data = await response.json()
@@ -209,7 +224,7 @@ ${text.slice(0, 7000)}`,
     throw new Error('Could not parse recipe from response')
   }
 
-  if (recipe.error) throw new Error(recipe.error)
+  if (recipe.error) throw new Error(errorText(recipe.error, 'Could not find a recipe in that'))
 
   return {
     ...recipe,

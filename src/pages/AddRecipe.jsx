@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Link as LinkIcon, PenLine, Camera, Plus, X, ChevronRight, Loader2, CheckCircle2, AlertCircle, AlertTriangle } from 'lucide-react'
 import { useAddRecipe, useRecipes } from '../hooks/useRecipes'
 import { useAppStore } from '../stores/useAppStore'
-import { extractFromVideo, extractFromWeb, isVideoUrl, authHeaders } from '../lib/extraction'
+import { extractFromVideo, extractFromWeb, isVideoUrl, authHeaders, errorText } from '../lib/extraction'
 import { computeCost } from '../lib/aiCost'
 import ThumbnailPicker from '../components/ui/ThumbnailPicker'
 import toast from 'react-hot-toast'
@@ -723,13 +723,16 @@ If no recipe is visible, return { "error": "No recipe found" }`,
         }),
       })
 
-      if (!res.ok) throw new Error('Claude API error')
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(errorText(err.error, 'Claude API error'))
+      }
       const data = await res.json()
       logAiCost?.(computeCost(PHOTO_MODEL, data.usage), 'photo_extraction')
       const raw = data.content?.[0]?.text?.trim() ?? ''
       const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
       const recipe = JSON.parse(cleaned)
-      if (recipe.error) throw new Error(recipe.error)
+      if (recipe.error) throw new Error(errorText(recipe.error, 'Could not find a recipe in that photo'))
       setExtracted(recipe)
       setStage('review')
     } catch (err) {

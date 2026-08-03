@@ -9,6 +9,20 @@ import { requireUser } from './_verifyAuth.js'
 
 export const config = { maxDuration: 60 }
 
+// Third-party error shapes (cobalt, OpenAI) aren't guaranteed — never let a
+// non-string value reach `new Error(...)`.
+function errorText(value, fallback) {
+  if (typeof value === 'string' && value.trim()) return value
+  if (value && typeof value === 'object') {
+    if (typeof value.message === 'string' && value.message.trim()) return value.message
+    try {
+      const json = JSON.stringify(value)
+      if (json && json !== '{}') return json
+    } catch { /* fall through */ }
+  }
+  return fallback
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
@@ -50,12 +64,12 @@ export default async function handler(req, res) {
 
       if (!cobaltRes.ok) {
         const err = await cobaltRes.json().catch(() => ({}))
-        throw new Error(err.error?.code || 'Failed to get video download URL')
+        throw new Error(errorText(err.error, 'Failed to get video download URL'))
       }
       const cobalt = await cobaltRes.json()
 
       if (cobalt.status === 'error') {
-        throw new Error(cobalt.error?.code || 'Could not process video URL')
+        throw new Error(errorText(cobalt.error, 'Could not process video URL'))
       }
       if (cobalt.status !== 'tunnel' && cobalt.status !== 'redirect') {
         throw new Error('Unexpected response from cobalt — try a different URL')
@@ -85,7 +99,7 @@ export default async function handler(req, res) {
 
     if (!whisperRes.ok) {
       const err = await whisperRes.json().catch(() => ({}))
-      throw new Error(err.error?.message || 'Whisper transcription failed')
+      throw new Error(errorText(err.error, 'Whisper transcription failed'))
     }
 
     const { text: transcript } = await whisperRes.json()
