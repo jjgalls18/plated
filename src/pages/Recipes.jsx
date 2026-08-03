@@ -25,7 +25,9 @@ export default function Recipes() {
   const [activeTag, setActiveTag] = useState(() => tagFromFilter(searchParams.get('filter')))
   const [view, setView] = useState('all') // 'all' | 'cookbook'
 
-  const { data: recipes = [], isLoading } = useRecipes(query)
+  // "Our Cookbook" has no search box of its own — don't let a query typed
+  // in "All Recipes" silently carry over and narrow the favorites list.
+  const { data: recipes = [], isLoading } = useRecipes(view === 'cookbook' ? '' : query)
 
   const favorites = recipes.filter((r) => r.is_favorite)
   const displayed = view === 'cookbook'
@@ -33,6 +35,11 @@ export default function Recipes() {
     : activeTag
       ? recipes.filter((r) => r.tags?.includes(activeTag))
       : recipes
+
+  const handleViewChange = (next) => {
+    setView(next)
+    if (next === 'cookbook') setQuery('')
+  }
 
   const handleSurprise = () => {
     if (!recipes.length) return
@@ -73,25 +80,27 @@ export default function Recipes() {
           )}
         </div>
 
-        {/* Search bar */}
-        <div className="relative">
-          <SearchIcon size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-warm-400 dark:text-stone-500" />
-          <input
-            type="search"
-            placeholder="Search recipes…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            className="w-full pl-11 pr-10 py-3.5 bg-white dark:bg-stone-800 rounded-2xl text-sm font-medium text-gray-900 dark:text-stone-50 placeholder-warm-400 dark:placeholder-stone-500 shadow-card outline-none focus:ring-2 focus:ring-primary/30 transition-all"
-          />
-          {query && (
-            <button
-              onClick={() => setQuery('')}
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-warm-400 dark:text-stone-500"
-            >
-              <X size={16} />
-            </button>
-          )}
-        </div>
+        {/* Search bar — All Recipes only; Our Cookbook is a small curated browsing list */}
+        {view === 'all' && (
+          <div className="relative">
+            <SearchIcon size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-warm-400 dark:text-stone-500" />
+            <input
+              type="search"
+              placeholder="Search recipes…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="w-full pl-11 pr-10 py-3.5 bg-white dark:bg-stone-800 rounded-2xl text-sm font-medium text-gray-900 dark:text-stone-50 placeholder-warm-400 dark:placeholder-stone-500 shadow-card outline-none focus:ring-2 focus:ring-primary/30 transition-all"
+            />
+            {query && (
+              <button
+                onClick={() => setQuery('')}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-warm-400 dark:text-stone-500"
+              >
+                <X size={16} />
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* All / Our Cookbook */}
@@ -100,7 +109,7 @@ export default function Recipes() {
           {[['all', 'All Recipes'], ['cookbook', `Our Cookbook${favorites.length ? ` (${favorites.length})` : ''}`]].map(([key, label]) => (
             <button
               key={key}
-              onClick={() => setView(key)}
+              onClick={() => handleViewChange(key)}
               className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-all ${
                 view === key ? 'bg-primary text-white shadow-soft' : 'text-warm-400 dark:text-stone-500'
               }`}

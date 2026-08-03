@@ -41,10 +41,21 @@ export function useCoupleStory() {
       if (existing?.id) {
         const { error } = await supabase.from('couple_story').update(fields).eq('id', existing.id)
         if (error) throw error
-      } else {
-        const { error } = await supabase.from('couple_story').insert(fields)
-        if (error) throw error
+        return
       }
+
+      // No known row yet — try to create the singleton. A DB-level unique
+      // index enforces at most one row, so if the partner's device won this
+      // race first, our insert fails with 23505 and we fall back to
+      // updating whichever row actually landed instead of erroring out.
+      const { error: insertError } = await supabase.from('couple_story').insert(fields)
+      if (!insertError) return
+      if (insertError.code !== '23505') throw insertError
+
+      const { data: winner, error: fetchError } = await supabase.from('couple_story').select('id').limit(1).single()
+      if (fetchError || !winner) throw insertError
+      const { error: updateError } = await supabase.from('couple_story').update(fields).eq('id', winner.id)
+      if (updateError) throw updateError
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: QUERY_KEY }),
   })

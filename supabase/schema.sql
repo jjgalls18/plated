@@ -89,6 +89,11 @@ create table public.couple_story (
   updated_at timestamptz default now()
 );
 
+-- Enforces true singleton at the DB level (constant expression -> at most
+-- one row can ever satisfy the index) so a race between two first-time
+-- saves can't produce two untethered rows.
+create unique index couple_story_singleton_idx on public.couple_story ((true));
+
 -- ─── Functions ────────────────────────────────────────────────────────────────
 
 create or replace function public.increment_made_count(recipe_id uuid)
