@@ -1,4 +1,9 @@
 {
+  "functions": {
+    "api/transcribe.js": {
+      "includeFiles": "node_modules/ffmpeg-static/**"
+    }
+  },
   "headers": [
     {
       "source": "/sw.js",
