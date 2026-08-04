@@ -18,9 +18,8 @@
 
 import { FormData, Blob } from 'node:buffer' // Node 18 has these built in
 import { spawn } from 'node:child_process'
-import { writeFile, readFile, unlink } from 'node:fs/promises'
+import { writeFile, readFile, unlink, chmod } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
-import ffmpegPath from 'ffmpeg-static'
 import { requireUser } from './_verifyAuth.js'
 import { cobaltHeaders, cobaltUrl } from './_cobaltAuth.js'
 
@@ -28,7 +27,19 @@ export const config = { maxDuration: 60 }
 
 const WHISPER_MAX_BYTES = 25 * 1024 * 1024
 
-function runFfmpeg(inPath, outPath) {
+// Lazy import — ffmpeg-static bundles an 80MB platform binary, so this only
+// loads when we're actually about to extract audio, not on every cold
+// start/request (including ones that never get past the auth check).
+async function getFfmpegPath() {
+  const mod = await import('ffmpeg-static')
+  const ffmpegPath = mod.default
+  if (!ffmpegPath) throw new Error('ffmpeg-static did not resolve a binary for this platform')
+  // Deployment packaging doesn't reliably preserve the executable bit.
+  await chmod(ffmpegPath, 0o755).catch(() => {})
+  return ffmpegPath
+}
+
+function runFfmpeg(ffmpegPath, inPath, outPath) {
   return new Promise((resolve, reject) => {
     const ff = spawn(ffmpegPath, [
       '-i', inPath,
@@ -55,8 +66,9 @@ async function extractAudio(videoBuffer) {
   const outPath = `/tmp/${id}.mp3`
 
   try {
+    const ffmpegPath = await getFfmpegPath()
     await writeFile(inPath, videoBuffer)
-    await runFfmpeg(inPath, outPath)
+    await runFfmpeg(ffmpegPath, inPath, outPath)
     return await readFile(outPath)
   } finally {
     await unlink(inPath).catch(() => {})
