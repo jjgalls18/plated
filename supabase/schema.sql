@@ -94,6 +94,24 @@ create table public.couple_story (
 -- saves can't produce two untethered rows.
 create unique index couple_story_singleton_idx on public.couple_story ((true));
 
+-- Video import queue — see migrations/20260805_video_queue.sql for the why.
+create table public.video_queue (
+  id                uuid primary key default gen_random_uuid(),
+  url               text not null,
+  status            text not null default 'queued'
+                      check (status in ('queued', 'partial', 'processing', 'complete', 'failed')),
+  caption_text      text,
+  partial_recipe    jsonb,
+  transcript_text   text,
+  final_recipe_id   uuid references public.recipes(id) on delete set null,
+  error_message     text,
+  created_by        uuid references auth.users(id),
+  created_at        timestamptz not null default now(),
+  updated_at        timestamptz not null default now()
+);
+
+create index video_queue_status_idx on public.video_queue (status);
+
 -- ─── Functions ────────────────────────────────────────────────────────────────
 
 create or replace function public.increment_made_count(recipe_id uuid)
@@ -120,6 +138,7 @@ grant select, insert, update, delete on public.grocery_items  to authenticated;
 grant select, insert, update, delete on public.pantry_items   to authenticated;
 grant select, insert, update, delete on public.meal_plans     to authenticated;
 grant select, insert, update, delete on public.couple_story   to authenticated;
+grant select, insert, update, delete on public.video_queue    to authenticated;
 
 -- ─── Function grants ──────────────────────────────────────────────────────────
 
@@ -134,6 +153,7 @@ alter table public.grocery_items  enable row level security;
 alter table public.pantry_items   enable row level security;
 alter table public.meal_plans     enable row level security;
 alter table public.couple_story   enable row level security;
+alter table public.video_queue    enable row level security;
 
 -- Profiles: reads are open to all authenticated users (partner lookups, cook log
 -- display names, invite-code joins all query other users' rows). Writes are
@@ -182,4 +202,7 @@ create policy "Linked partners full access" on public.meal_plans
   for all to authenticated using (public.is_linked_partner()) with check (public.is_linked_partner());
 
 create policy "Linked partners full access" on public.couple_story
+  for all to authenticated using (public.is_linked_partner()) with check (public.is_linked_partner());
+
+create policy "Linked partners full access" on public.video_queue
   for all to authenticated using (public.is_linked_partner()) with check (public.is_linked_partner());

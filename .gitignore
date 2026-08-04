@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# Scratch files for handing secrets to Claude Code — never commit these
+vercel-env-values.txt
+cloudflare token
+cobalt cloudflare token
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

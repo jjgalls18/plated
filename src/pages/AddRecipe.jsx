@@ -1,9 +1,11 @@
 import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Link as LinkIcon, PenLine, Camera, Plus, X, ChevronRight, Loader2, CheckCircle2, AlertCircle, AlertTriangle } from 'lucide-react'
+import { ArrowLeft, Link as LinkIcon, PenLine, Camera, Plus, X, ChevronRight, Loader2, CheckCircle2, AlertCircle, AlertTriangle, Clock, RefreshCw } from 'lucide-react'
 import { useAddRecipe, useRecipes } from '../hooks/useRecipes'
 import { useAppStore } from '../stores/useAppStore'
-import { extractFromVideo, extractFromWeb, isVideoUrl, authHeaders, errorText } from '../lib/extraction'
+import { useCobaltStatus } from '../hooks/useCobaltStatus'
+import { useVideoQueue } from '../hooks/useVideoQueue'
+import { extractFromVideo, extractFromWeb, extractCaptionPartial, isVideoUrl, authHeaders, errorText } from '../lib/extraction'
 import { computeCost } from '../lib/aiCost'
 import ThumbnailPicker from '../components/ui/ThumbnailPicker'
 import toast from 'react-hot-toast'
@@ -71,15 +73,42 @@ const STEPS_WEB = [
 function UrlMode({ onBack, addRecipe, navigate }) {
   const { anthropicApiKey, openaiApiKey, aiEnabled, logAiCost } = useAppStore()
   const { data: savedRecipes = [] } = useRecipes()
+  const { reachable: cobaltReachable, checking: checkingCobalt, refresh: refreshCobalt } = useCobaltStatus()
+  const { addToQueue, updateQueueItem } = useVideoQueue()
   const [url, setUrl] = useState('')
-  const [stage, setStage] = useState('input') // input | processing | review | error
+  const [stage, setStage] = useState('input') // input | processing | queuing | review | error
   const [stepLabel, setStepLabel] = useState('')
   const [extracted, setExtracted] = useState(null)
   const [errorMsg, setErrorMsg] = useState('')
   const [saving, setSaving] = useState(false)
 
   const isVideo = isVideoUrl(url)
-  const hasKeys = aiEnabled && (isVideo ? (anthropicApiKey && openaiApiKey) : !!anthropicApiKey)
+  const willQueue = isVideo && !cobaltReachable
+  // Queueing only needs the Anthropic key (for caption pre-processing) —
+  // the OpenAI key isn't needed until Cobalt actually transcribes it later.
+  const hasKeys = aiEnabled && (isVideo ? (willQueue ? !!anthropicApiKey : anthropicApiKey && openaiApiKey) : !!anthropicApiKey)
+
+  const handleQuickSave = async () => {
+    if (!url.trim()) return
+    setStage('queuing')
+    try {
+      const queued = await addToQueue({ url, status: 'queued' })
+      toast.success('Saved to queue!')
+      setUrl('')
+      setStage('input')
+      // Pre-process from the caption in the background — don't block the
+      // "saved" confirmation on this, it's a nice-to-have, not required.
+      extractCaptionPartial(url, { anthropicApiKey, savedRecipes, logAiCost })
+        .then((partial) => {
+          if (partial) updateQueueItem(queued.id, { status: 'partial', caption_text: partial.description || null, partial_recipe: partial })
+        })
+        .catch(() => {})
+      navigate('/queue')
+    } catch (err) {
+      toast.error(err.message || 'Could not save to queue')
+      setStage('input')
+    }
+  }
 
   const handleExtract = async () => {
     if (!url.trim()) return
@@ -87,6 +116,7 @@ function UrlMode({ onBack, addRecipe, navigate }) {
       toast.error('AI is turned off — enable it in admin settings (tap logo 5×)')
       return
     }
+    if (willQueue) return handleQuickSave()
     setStage('processing')
     setStepLabel('')
     try {
@@ -110,6 +140,12 @@ function UrlMode({ onBack, addRecipe, navigate }) {
       setExtracted(recipe)
       setStage('review')
     } catch (err) {
+      // Cobalt went down between the status check and this request — queue
+      // instead of showing a hard failure.
+      if (err.cobaltUnreachable) {
+        refreshCobalt()
+        return handleQuickSave()
+      }
       setErrorMsg(err.message || 'Something went wrong')
       setStage('error')
     }
@@ -141,6 +177,15 @@ function UrlMode({ onBack, addRecipe, navigate }) {
 
   if (stage === 'processing') {
     return <ProcessingScreen stepLabel={stepLabel} isVideo={isVideo} />
+  }
+
+  if (stage === 'queuing') {
+    return (
+      <div className="min-h-screen bg-cream dark:bg-stone-900 flex flex-col items-center justify-center px-5 text-center">
+        <Loader2 size={32} className="text-primary animate-spin mb-4" />
+        <p className="text-warm-400 dark:text-stone-500 text-sm">Saving to queue…</p>
+      </div>
+    )
   }
 
   if (stage === 'review' && extracted) {
@@ -176,10 +221,17 @@ function UrlMode({ onBack, addRecipe, navigate }) {
         <button onClick={onBack} className="w-9 h-9 bg-white dark:bg-stone-800 rounded-full flex items-center justify-center shadow-card">
           <ArrowLeft size={18} className="text-gray-700 dark:text-stone-300" />
         </button>
-        <div>
+        <div className="flex-1">
           <h1 className="font-display text-2xl font-bold text-gray-900 dark:text-stone-50">Paste a link</h1>
           <p className="text-warm-400 dark:text-stone-500 text-xs mt-0.5">TikTok, Instagram, YouTube, or any recipe site</p>
         </div>
+        <button
+          onClick={() => navigate('/queue')}
+          className="w-9 h-9 bg-white dark:bg-stone-800 rounded-full flex items-center justify-center shadow-card"
+          title="Video queue"
+        >
+          <Clock size={16} className="text-gray-700 dark:text-stone-300" />
+        </button>
       </div>
 
       <div className="px-5 space-y-4">
@@ -202,8 +254,24 @@ function UrlMode({ onBack, addRecipe, navigate }) {
               ? 'bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400'
               : 'bg-primary-50 dark:bg-primary/20 text-primary'
           }`}>
-            {isVideo ? '🎬 Video detected — will transcribe audio' : '🌐 Web page — will extract recipe text'}
+            {isVideo
+              ? (willQueue ? '🎬 Video detected — will save to queue' : '🎬 Video detected — will transcribe audio')
+              : '🌐 Web page — will extract recipe text'}
           </div>
+        )}
+
+        {/* Home server status — only relevant for video links */}
+        {isVideo && (
+          <button
+            onClick={() => refreshCobalt()}
+            className="w-full flex items-center gap-2.5 px-4 py-2.5 bg-white dark:bg-stone-800 rounded-2xl shadow-card text-left active:scale-[0.98] transition-transform"
+          >
+            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${cobaltReachable ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+            <span className="flex-1 text-xs font-medium text-gray-700 dark:text-stone-300">
+              {cobaltReachable ? 'Home server reachable — instant extraction' : 'Home server unreachable — will queue'}
+            </span>
+            <RefreshCw size={12} className={`text-warm-400 dark:text-stone-500 ${checkingCobalt ? 'animate-spin' : ''}`} />
+          </button>
         )}
 
         {/* API key / AI-off warning */}
@@ -216,7 +284,9 @@ function UrlMode({ onBack, addRecipe, navigate }) {
               {!aiEnabled
                 ? 'Turn on AI in admin settings to use recipe extraction. Tap the Plated logo 5 times to open admin settings.'
                 : isVideo
-                  ? 'Video extraction needs both an Anthropic key and an OpenAI key. Tap the Plated logo 5 times to open admin settings.'
+                  ? willQueue
+                    ? 'Saving to the queue needs an Anthropic key for the caption preview. Tap the Plated logo 5 times to open admin settings.'
+                    : 'Video extraction needs both an Anthropic key and an OpenAI key. Tap the Plated logo 5 times to open admin settings.'
                   : 'Web extraction needs an Anthropic API key. Tap the Plated logo 5 times to open admin settings.'}
             </p>
           </div>
@@ -228,7 +298,7 @@ function UrlMode({ onBack, addRecipe, navigate }) {
           disabled={!url.trim() || !hasKeys}
           className="w-full py-4 bg-primary text-white font-bold rounded-2xl text-sm shadow-soft active:scale-[0.98] transition-all disabled:opacity-50"
         >
-          {isVideo ? '🎬 Extract from video' : '✨ Extract recipe'}
+          {isVideo ? (willQueue ? <><Clock size={15} className="inline mr-1.5 -mt-0.5" />Save to Queue</> : '🎬 Extract from video') : '✨ Extract recipe'}
         </button>
 
         {/* How it works */}

@@ -1,11 +1,13 @@
 /**
- * Vercel serverless function: download video audio + transcribe with Whisper
+ * Vercel serverless function: download video audio (via self-hosted Cobalt)
+ * + transcribe with Whisper
  * POST /api/transcribe
  * Body: { url: string, openaiApiKey: string }
  */
 
 import { FormData, Blob } from 'node:buffer' // Node 18 has these built in
 import { requireUser } from './_verifyAuth.js'
+import { cobaltHeaders, cobaltUrl } from './_cobaltAuth.js'
 
 export const config = { maxDuration: 60 }
 
@@ -48,19 +50,34 @@ export default async function handler(req, res) {
     const urlType = getUrlType(url)
 
     if (urlType === 'tiktok' || urlType === 'instagram' || urlType === 'youtube') {
-      // cobalt.tools v7+ API — audio-only download
-      const cobaltRes = await fetch('https://api.cobalt.tools/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify({
-          url,
-          downloadMode: 'audio',
-          audioFormat: 'mp3',
-        }),
-      })
+      const baseUrl = cobaltUrl()
+      const headers = cobaltHeaders()
+      if (!baseUrl || !headers) {
+        const err = new Error('Cobalt is not configured')
+        err.cobaltUnreachable = true
+        throw err
+      }
+
+      let cobaltRes
+      try {
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), 20000)
+        cobaltRes = await fetch(baseUrl, {
+          method: 'POST',
+          headers,
+          signal: controller.signal,
+          body: JSON.stringify({
+            url,
+            downloadMode: 'audio',
+            audioFormat: 'mp3',
+          }),
+        })
+        clearTimeout(timeout)
+      } catch {
+        const err = new Error('Home server is unreachable right now')
+        err.cobaltUnreachable = true
+        throw err
+      }
 
       if (!cobaltRes.ok) {
         const err = await cobaltRes.json().catch(() => ({}))
@@ -108,7 +125,10 @@ export default async function handler(req, res) {
 
   } catch (err) {
     console.error('Transcribe error:', err)
-    return res.status(500).json({ error: err.message || 'Transcription failed' })
+    return res.status(err.cobaltUnreachable ? 503 : 500).json({
+      error: err.message || 'Transcription failed',
+      cobaltUnreachable: !!err.cobaltUnreachable,
+    })
   }
 }
 

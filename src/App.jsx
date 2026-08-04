@@ -22,6 +22,7 @@ const MealPlan = lazy(() => import('./pages/MealPlan'))
 const Grocery = lazy(() => import('./pages/Grocery'))
 const ShopMode = lazy(() => import('./pages/ShopMode'))
 const Assistant = lazy(() => import('./pages/Assistant'))
+const Queue = lazy(() => import('./pages/Queue'))
 const Profile = lazy(() => import('./pages/Profile'))
 const AdminScreen = lazy(() => import('./pages/AdminScreen'))
 const EditRecipe = lazy(() => import('./pages/EditRecipe'))
@@ -51,6 +52,7 @@ function AppRoutes() {
         <Route path="/recipe/:id" element={<AppShell><RecipeDetail /></AppShell>} />
         <Route path="/meal-plan" element={<AppShell><MealPlan /></AppShell>} />
         <Route path="/grocery" element={<AppShell><Grocery /></AppShell>} />
+        <Route path="/queue" element={<AppShell><Queue /></AppShell>} />
         <Route path="/profile" element={<AppShell><Profile /></AppShell>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

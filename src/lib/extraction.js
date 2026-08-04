@@ -54,17 +54,18 @@ export function getUrlType(url) {
 }
 
 /**
- * Extract recipe from a video URL (TikTok, Instagram, YouTube)
- * Uses Whisper for transcription + Claude for extraction
+ * Downloads + transcribes a video's audio via the self-hosted Cobalt +
+ * Whisper — just the transcript, no Claude extraction. Used both by the
+ * immediate-extraction path and the queue processor (which needs the raw
+ * transcript to merge with a caption-derived partial recipe).
  */
-export async function extractFromVideo(url, { anthropicApiKey, openaiApiKey, onStep, savedRecipes = [], logAiCost }) {
-  if (!anthropicApiKey || !openaiApiKey) {
-    throw new Error('API keys required — add them in the admin panel (tap logo 5 times)')
+export async function transcribeVideoAudio(url, { openaiApiKey, onStep }) {
+  if (!openaiApiKey) {
+    throw new Error('OpenAI API key required for video transcription — add it in the admin panel (tap logo 5 times)')
   }
 
   onStep?.('Fetching video audio…')
 
-  // Call our Vercel serverless function to download + transcribe
   const transcribeRes = await fetch('/api/transcribe', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
@@ -73,12 +74,27 @@ export async function extractFromVideo(url, { anthropicApiKey, openaiApiKey, onS
 
   if (!transcribeRes.ok) {
     const err = await transcribeRes.json().catch(() => ({}))
-    throw new Error(errorText(err.error, 'Failed to transcribe video'))
+    const e = new Error(errorText(err.error, 'Failed to transcribe video'))
+    e.cobaltUnreachable = !!err.cobaltUnreachable
+    throw e
   }
 
-  const { transcript } = await transcribeRes.json()
-
   onStep?.('Transcribing with Whisper…')
+  const { transcript } = await transcribeRes.json()
+  return transcript
+}
+
+/**
+ * Extract recipe from a video URL (TikTok, Instagram, YouTube)
+ * Uses Whisper for transcription + Claude for extraction
+ */
+export async function extractFromVideo(url, { anthropicApiKey, openaiApiKey, onStep, savedRecipes = [], logAiCost }) {
+  if (!anthropicApiKey || !openaiApiKey) {
+    throw new Error('API keys required — add them in the admin panel (tap logo 5 times)')
+  }
+
+  const transcript = await transcribeVideoAudio(url, { openaiApiKey, onStep })
+
   onStep?.('Extracting recipe with Claude…')
 
   // TikTok/Instagram/YouTube extraction uses Sonnet 5 — transcripts are messier
@@ -126,6 +142,108 @@ export async function extractFromWeb(url, { anthropicApiKey, onStep, savedRecipe
 }
 
 /**
+ * Best-effort partial recipe from a TikTok/Instagram page's caption — no
+ * Cobalt needed, so this works even while the video queue can't be
+ * processed. Marked as a partial extraction; the caller is responsible for
+ * labeling it clearly (this function doesn't know about queue status).
+ */
+export async function extractCaptionPartial(url, { anthropicApiKey, savedRecipes = [], logAiCost }) {
+  if (!anthropicApiKey) return null
+
+  const fetchRes = await fetch('/api/fetch-page', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
+    body: JSON.stringify({ url }),
+  })
+  if (!fetchRes.ok) return null
+  const { text } = await fetchRes.json()
+  if (!text?.trim()) return null
+
+  try {
+    const recipe = await extractRecipeFromText(text, anthropicApiKey, url, savedRecipes, {
+      model: 'claude-haiku-4-5-20251001',
+      feature: 'caption_preprocess',
+      logAiCost,
+      captionMode: true,
+    })
+    return recipe
+  } catch {
+    // Caption often won't have a full recipe — that's expected, not an error.
+    return null
+  }
+}
+
+/**
+ * Merges a caption-derived partial recipe with the full video transcript
+ * once Cobalt processes it — Sonnet 5, since this needs actual judgment
+ * about what's redundant vs. what the transcript adds/corrects.
+ */
+export async function mergeQueuedRecipe({ partialRecipe, transcript, sourceUrl, anthropicApiKey, logAiCost }) {
+  const response = await fetch('/api/anthropic', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...(await authHeaders()) },
+    body: JSON.stringify({
+      apiKey: anthropicApiKey,
+      model: 'claude-sonnet-5',
+      max_tokens: 2000,
+      messages: [{
+        role: 'user',
+        content: `You extracted a PARTIAL recipe from a social media caption earlier. Now you have the
+full video transcript too. Merge them into one final, complete recipe — the transcript is the
+more reliable/complete source, so prefer it whenever it conflicts with the partial version, but
+keep anything useful from the partial that the transcript doesn't mention. Do not duplicate
+ingredients or steps that describe the same thing.
+
+Return ONLY valid JSON, no markdown, no explanation, in this exact format:
+{
+  "title": "Recipe name",
+  "description": "1-2 sentence description",
+  "prep_time": 10,
+  "cook_time": 20,
+  "servings": 4,
+  "tags": ["tag1", "tag2"],
+  "ingredients": [{ "amount": "2 cups", "name": "all-purpose flour" }],
+  "steps": ["Step 1 description", "Step 2 description"],
+  "confidence": 0.9
+}
+
+PARTIAL RECIPE (from caption):
+${JSON.stringify(partialRecipe, null, 2)}
+
+FULL TRANSCRIPT (from video audio):
+${transcript.slice(0, 7000)}`,
+      }],
+    }),
+  })
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}))
+    throw new Error(errorText(err.error, 'Claude API error'))
+  }
+
+  const data = await response.json()
+  logAiCost?.(computeCost('claude-sonnet-5', data.usage), 'video_merge')
+  const raw = data.content?.[0]?.text?.trim() ?? ''
+  const content = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
+
+  let recipe
+  try {
+    recipe = JSON.parse(content)
+  } catch {
+    throw new Error('Could not parse merged recipe from response')
+  }
+
+  return {
+    ...recipe,
+    source_url: sourceUrl,
+    ingredients: recipe.ingredients || [],
+    steps: recipe.steps || [],
+    tags: recipe.tags || [],
+    confidence: recipe.confidence ?? 1.0,
+  }
+}
+
+/**
  * Build a few-shot example block from the user's saved recipes (up to 2)
  */
 function buildFewShotExamples(savedRecipes) {
@@ -153,8 +271,15 @@ function buildFewShotExamples(savedRecipes) {
 /**
  * Call Claude to extract a structured recipe from text
  */
-async function extractRecipeFromText(text, anthropicApiKey, sourceUrl, savedRecipes = [], { model = 'claude-haiku-4-5-20251001', feature = 'extraction', logAiCost } = {}) {
+export async function extractRecipeFromText(text, anthropicApiKey, sourceUrl, savedRecipes = [], { model = 'claude-haiku-4-5-20251001', feature = 'extraction', logAiCost, captionMode = false } = {}) {
   const fewShot = buildFewShotExamples(savedRecipes)
+  const captionNote = captionMode
+    ? `\nThis text is a social media post's caption/page dump, not a full recipe write-up — it will
+often be incomplete or missing measurements entirely. That's expected. Extract whatever you can
+even if it's just a dish name and a rough ingredient list; set "confidence" low (0.1-0.4) to
+reflect that. Only return { "error": "No recipe found" } if there's truly no food/dish mentioned
+at all.\n`
+    : ''
 
   const response = await fetch('/api/anthropic', {
     method: 'POST',
@@ -166,7 +291,7 @@ async function extractRecipeFromText(text, anthropicApiKey, sourceUrl, savedReci
       messages: [{
         role: 'user',
         content: `Extract the recipe from this text. Return ONLY valid JSON, no markdown, no explanation.
-${fewShot}
+${captionNote}${fewShot}
 JSON format:
 {
   "title": "Recipe name",
