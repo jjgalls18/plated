@@ -35,4 +35,13 @@ export default [
       ],
     },
   },
+  {
+    // Vercel serverless functions run on Node, not in the browser — without
+    // this they're linted against browser globals, so Node-only globals read
+    // as undefined and real mistakes hide among the false positives.
+    files: ['api/**/*.js'],
+    languageOptions: {
+      globals: { ...globals.node, ...globals.browser },
+    },
+  },
 ]

@@ -24,6 +24,31 @@ export function errorText(value, fallback) {
   return fallback
 }
 
+/**
+ * Builds an Error from a failed API response.
+ *
+ * Not every failure comes back as our own JSON: a crashed or timed-out Vercel
+ * function answers with a plain-text platform page ("FUNCTION_INVOCATION_FAILED"),
+ * and blindly `.json()`-ing that throws away the only clue about what broke,
+ * leaving a generic fallback on screen. Parse JSON when it is JSON, and
+ * otherwise surface the raw body so the real reason reaches the error screen.
+ */
+export async function apiError(res, fallback) {
+  const body = await res.text().catch(() => '')
+
+  let json
+  try {
+    json = JSON.parse(body)
+  } catch {
+    const snippet = body.replace(/\s+/g, ' ').trim().slice(0, 200)
+    return new Error(snippet ? `${fallback} — server said: ${snippet}` : `${fallback} (HTTP ${res.status})`)
+  }
+
+  const err = new Error(errorText(json?.error, fallback))
+  err.cobaltUnreachable = !!json?.cobaltUnreachable
+  return err
+}
+
 // /api/fetch-page and /api/transcribe proxy arbitrary outbound requests — require
 // a valid Supabase session so the endpoints aren't a public open proxy.
 export async function authHeaders() {
@@ -73,10 +98,7 @@ export async function transcribeVideoAudio(url, { openaiApiKey, onStep }) {
   })
 
   if (!transcribeRes.ok) {
-    const err = await transcribeRes.json().catch(() => ({}))
-    const e = new Error(errorText(err.error, 'Failed to transcribe video'))
-    e.cobaltUnreachable = !!err.cobaltUnreachable
-    throw e
+    throw await apiError(transcribeRes, 'Failed to transcribe video')
   }
 
   onStep?.('Transcribing with Whisper…')
@@ -125,8 +147,7 @@ export async function extractFromWeb(url, { anthropicApiKey, onStep, savedRecipe
   })
 
   if (!fetchRes.ok) {
-    const err = await fetchRes.json().catch(() => ({}))
-    throw new Error(errorText(err.error, 'Failed to fetch page'))
+    throw await apiError(fetchRes, 'Failed to fetch page')
   }
 
   const { text } = await fetchRes.json()
@@ -217,8 +238,7 @@ ${transcript.slice(0, 7000)}`,
   })
 
   if (!response.ok) {
-    const err = await response.json().catch(() => ({}))
-    throw new Error(errorText(err.error, 'Claude API error'))
+    throw await apiError(response, 'Claude API error')
   }
 
   const data = await response.json()
@@ -333,8 +353,7 @@ ${text.slice(0, 7000)}`,
   })
 
   if (!response.ok) {
-    const err = await response.json().catch(() => ({}))
-    throw new Error(errorText(err.error, 'Claude API error'))
+    throw await apiError(response, 'Claude API error')
   }
 
   const data = await response.json()

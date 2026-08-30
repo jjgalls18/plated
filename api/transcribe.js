@@ -16,7 +16,11 @@
  * audio alone stays small regardless of video length.
  */
 
-import { FormData, Blob } from 'node:buffer' // Node 18 has these built in
+// FormData and Blob are Node 18 globals (via undici) — deliberately NOT
+// imported from 'node:buffer'. That module exports Blob but not FormData, and
+// a named ESM import of a non-existent export is a load-time SyntaxError, which
+// on Vercel takes down the whole function with FUNCTION_INVOCATION_FAILED
+// before the handler ever runs.
 import { spawn } from 'node:child_process'
 import { writeFile, readFile, unlink, chmod } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
