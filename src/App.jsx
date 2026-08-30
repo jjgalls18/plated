@@ -1,4 +1,4 @@
-import { useEffect, useState, lazy, Suspense } from 'react'
+import { useEffect, lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'react-hot-toast'
@@ -6,6 +6,7 @@ import { queryClient } from './lib/queryClient'
 import { useAuth } from './hooks/useAuth'
 import { useAppStore } from './stores/useAppStore'
 import AppShell from './components/layout/AppShell'
+import ErrorBoundary from './components/ErrorBoundary'
 import Home from './pages/Home'
 import Auth from './pages/Auth'
 import LoadingScreen from './components/ui/LoadingScreen'
@@ -73,7 +74,9 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <ThemeProvider />
-        <AppRoutes />
+        <ErrorBoundary>
+          <AppRoutes />
+        </ErrorBoundary>
         <Toaster
           position="top-center"
           toastOptions={{
