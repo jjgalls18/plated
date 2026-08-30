@@ -25,6 +25,38 @@ export function errorText(value, fallback) {
 }
 
 /**
+ * Turns whatever got thrown into something a human can act on.
+ *
+ * "[object Object]" is the default string conversion of a plain object, so an
+ * error carrying it went through `new Error(someObject)` somewhere — the real
+ * reason is still attached to the error, just not on .message. Dig it out
+ * instead of putting a meaningless string on screen. Nothing in this app
+ * should ever surface "[object Object]" to a user again.
+ */
+export function describeError(err) {
+  if (err == null) return 'Something went wrong'
+  if (typeof err === 'string') return err.trim() || 'Something went wrong'
+
+  const message = typeof err.message === 'string' ? err.message.trim() : ''
+  if (message && message !== '[object Object]') return message
+
+  const own = {}
+  for (const key of Object.getOwnPropertyNames(err)) {
+    if (key === 'stack' || key === 'message') continue
+    const value = err[key]
+    if (value !== undefined && typeof value !== 'function') own[key] = value
+  }
+
+  try {
+    const json = JSON.stringify(own)
+    if (json && json !== '{}') return `${err.name || 'Error'}: ${json}`
+  } catch { /* fall through */ }
+
+  const firstStackLine = typeof err.stack === 'string' ? err.stack.split('\n')[0].trim() : ''
+  return firstStackLine || `${err.name || 'Error'} (no details available)`
+}
+
+/**
  * Builds an Error from a failed API response.
  *
  * Not every failure comes back as our own JSON: a crashed or timed-out Vercel

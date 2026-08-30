@@ -1,8 +1,20 @@
+import { execSync } from 'node:child_process'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
+// Stamped into the bundle so a failure screen can say which build produced it.
+// An installed PWA can keep serving an old bundle long after a deploy lands,
+// and without this there's no way to tell that apart from a real bug.
+const buildId = (() => {
+  const sha = process.env.VERCEL_GIT_COMMIT_SHA
+    || (() => { try { return execSync('git rev-parse HEAD').toString().trim() } catch { return '' } })()
+  const short = sha ? sha.slice(0, 7) : 'local'
+  return `${short} · ${new Date().toISOString().slice(0, 16).replace('T', ' ')}Z`
+})()
+
 export default defineConfig({
+  define: { __BUILD_ID__: JSON.stringify(buildId) },
   plugins: [
     react(),
     VitePWA({

@@ -5,7 +5,7 @@ import { useAddRecipe, useRecipes } from '../hooks/useRecipes'
 import { useAppStore } from '../stores/useAppStore'
 import { useCobaltStatus } from '../hooks/useCobaltStatus'
 import { useVideoQueue } from '../hooks/useVideoQueue'
-import { extractFromVideo, extractFromWeb, extractCaptionPartial, isVideoUrl, authHeaders, errorText } from '../lib/extraction'
+import { extractFromVideo, extractFromWeb, extractCaptionPartial, isVideoUrl, authHeaders, errorText, describeError } from '../lib/extraction'
 import { computeCost } from '../lib/aiCost'
 import ThumbnailPicker from '../components/ui/ThumbnailPicker'
 import toast from 'react-hot-toast'
@@ -146,7 +146,7 @@ function UrlMode({ onBack, addRecipe, navigate }) {
         refreshCobalt()
         return handleQuickSave()
       }
-      setErrorMsg(err.message || 'Something went wrong')
+      setErrorMsg(describeError(err))
       setStage('error')
     }
   }
@@ -207,10 +207,14 @@ function UrlMode({ onBack, addRecipe, navigate }) {
           <AlertCircle size={32} className="text-rose-500" />
         </div>
         <h2 className="font-display font-bold text-xl text-gray-900 dark:text-stone-50 mb-2">Extraction failed</h2>
-        <p className="text-warm-400 dark:text-stone-500 text-sm mb-6 max-w-xs">{errorMsg}</p>
+        <p className="text-warm-400 dark:text-stone-500 text-sm mb-6 max-w-xs break-words">{errorMsg}</p>
         <button onClick={() => setStage('input')} className="px-6 py-3 bg-primary text-white rounded-2xl font-semibold text-sm active:scale-95 transition-all">
           Try again
         </button>
+        {/* Identifies the running build — an installed PWA can serve a stale
+            bundle well after a deploy, which otherwise looks like the fix
+            simply not working. */}
+        <p className="text-warm-400/60 dark:text-stone-600 text-[10px] mt-6 font-mono">build {__BUILD_ID__}</p>
       </div>
     )
   }

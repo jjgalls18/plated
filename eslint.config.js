@@ -10,7 +10,7 @@ export default [
     files: ['**/*.{js,jsx}'],
     languageOptions: {
       ecmaVersion: 2020,
-      globals: globals.browser,
+      globals: { ...globals.browser, __BUILD_ID__: 'readonly' },
       parserOptions: {
         ecmaVersion: 'latest',
         ecmaFeatures: { jsx: true },
@@ -39,7 +39,7 @@ export default [
     // Vercel serverless functions run on Node, not in the browser — without
     // this they're linted against browser globals, so Node-only globals read
     // as undefined and real mistakes hide among the false positives.
-    files: ['api/**/*.js'],
+    files: ['api/**/*.js', '*.config.js', 'scripts/**/*.js'],
     languageOptions: {
       globals: { ...globals.node, ...globals.browser },
     },
