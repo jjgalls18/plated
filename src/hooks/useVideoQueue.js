@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useId } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import { useAuth } from './useAuth'
@@ -22,16 +22,22 @@ export function useVideoQueue() {
     },
   })
 
+  // Unique per subscriber, not per table: several components can use this hook
+  // at once (QueueBanner lives in AppShell, so it mounts alongside every page),
+  // and supabase-js returns the already-subscribed channel when two callers ask
+  // for the same topic — binding postgres_changes to it then throws.
+  const channelId = useId()
+
   useEffect(() => {
     if (!isSupabaseConfigured || !user) return
     const channel = supabase
-      .channel('video-queue-sync')
+      .channel(`video-queue-sync-${channelId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'video_queue' }, () => {
         qc.invalidateQueries({ queryKey: QUERY_KEY })
       })
       .subscribe()
     return () => supabase.removeChannel(channel)
-  }, [user, qc])
+  }, [user, qc, channelId])
 
   const addMutation = useMutation({
     mutationFn: async ({ url, caption_text, partial_recipe, status = 'queued' }) => {

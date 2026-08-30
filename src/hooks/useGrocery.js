@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useId } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import { useAppStore } from '../stores/useAppStore'
@@ -49,18 +49,24 @@ export function useGrocery() {
   })
 
   // ─── Realtime sync ───────────────────────────────────────────────────────────
+  // Unique per subscriber, not per table: several components can use this hook
+  // at once (QueueBanner lives in AppShell, so it mounts alongside every page),
+  // and supabase-js returns the already-subscribed channel when two callers ask
+  // for the same topic — binding postgres_changes to it then throws.
+  const channelId = useId()
+
   useEffect(() => {
     if (!isSupabaseConfigured || !user) return
 
     const channel = supabase
-      .channel('grocery-sync')
+      .channel(`grocery-sync-${channelId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'grocery_items' }, () => {
         qc.invalidateQueries({ queryKey: QUERY_KEY })
       })
       .subscribe()
 
     return () => supabase.removeChannel(channel)
-  }, [user, qc])
+  }, [user, qc, channelId])
 
   // ─── Mutations ───────────────────────────────────────────────────────────────
 

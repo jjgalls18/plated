@@ -4,6 +4,12 @@
       "includeFiles": "node_modules/ffmpeg-static/**"
     }
   },
+  "rewrites": [
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
+  ],
   "headers": [
     {
       "source": "/sw.js",

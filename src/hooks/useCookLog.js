@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useId } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import { useAuth } from './useAuth'
@@ -53,16 +53,22 @@ export function useCookLog(limit = 100) {
   })
 
   // Realtime sync
+  // Unique per subscriber, not per table: several components can use this hook
+  // at once (QueueBanner lives in AppShell, so it mounts alongside every page),
+  // and supabase-js returns the already-subscribed channel when two callers ask
+  // for the same topic — binding postgres_changes to it then throws.
+  const channelId = useId()
+
   useEffect(() => {
     if (!isSupabaseConfigured || !user) return
     const channel = supabase
-      .channel('cook-log-sync')
+      .channel(`cook-log-sync-${channelId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'made_it_log' }, () => {
         qc.invalidateQueries({ queryKey: QUERY_KEY })
       })
       .subscribe()
     return () => supabase.removeChannel(channel)
-  }, [user, qc])
+  }, [user, qc, channelId])
 
   // Non-Supabase fallback: normalize local Zustand log
   if (!isSupabaseConfigured) {
