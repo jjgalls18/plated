@@ -26,16 +26,42 @@ export function useCobaltStatus() {
       const res = await fetch('/api/cobalt-status', {
         headers: { Authorization: `Bearer ${session.access_token}` },
       })
-      if (!res.ok) return { reachable: false }
+      if (!res.ok) return { reachable: false, reason: 'status_check_failed' }
       return res.json()
     },
   })
 
   return {
     reachable: !!query.data?.reachable,
+    reason: query.data?.reason || null,
+    version: query.data?.version || null,
     isLoading: query.isLoading,
     checking: query.isFetching,
     refresh: query.refetch,
+  }
+}
+
+/**
+ * Why the home server isn't usable. "Unreachable" alone is misleading — a
+ * missing server-side config and a rejected Cloudflare Access token both look
+ * identical from the app, but only one of them is a network problem.
+ */
+export function cobaltStatusLabel({ reachable, reason, version }) {
+  if (reachable) return `Home server reachable${version ? ` (cobalt ${version})` : ''} — instant extraction`
+
+  switch (reason) {
+    case 'not_configured':
+      return 'Home server not configured — check the Cobalt env vars in Vercel'
+    case 'auth_rejected':
+      return 'Cloudflare Access rejected the server credentials — will queue'
+    case 'not_cobalt':
+      return "Reached the tunnel but it isn't Cobalt — will queue"
+    case 'timeout':
+      return 'Home server timed out — will queue'
+    case 'bad_status':
+      return 'Home server returned an error — will queue'
+    default:
+      return 'Home server unreachable — will queue'
   }
 }
 

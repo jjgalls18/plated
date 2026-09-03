@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Link as LinkIcon, PenLine, Camera, Plus, X, ChevronRight, Loader2, CheckCircle2, AlertCircle, AlertTriangle, Clock, RefreshCw } from 'lucide-react'
 import { useAddRecipe, useRecipes } from '../hooks/useRecipes'
 import { useAppStore } from '../stores/useAppStore'
-import { useCobaltStatus } from '../hooks/useCobaltStatus'
+import { useCobaltStatus, cobaltStatusLabel } from '../hooks/useCobaltStatus'
 import { useVideoQueue } from '../hooks/useVideoQueue'
 import { extractFromVideo, extractFromWeb, extractCaptionPartial, isVideoUrl, authHeaders, errorText, describeError } from '../lib/extraction'
 import { computeCost } from '../lib/aiCost'
@@ -73,7 +73,7 @@ const STEPS_WEB = [
 function UrlMode({ onBack, addRecipe, navigate }) {
   const { anthropicApiKey, openaiApiKey, aiEnabled, logAiCost } = useAppStore()
   const { data: savedRecipes = [] } = useRecipes()
-  const { reachable: cobaltReachable, checking: checkingCobalt, refresh: refreshCobalt } = useCobaltStatus()
+  const { reachable: cobaltReachable, reason: cobaltReason, version: cobaltVersion, checking: checkingCobalt, refresh: refreshCobalt } = useCobaltStatus()
   const { addToQueue, updateQueueItem } = useVideoQueue()
   const [url, setUrl] = useState('')
   const [stage, setStage] = useState('input') // input | processing | queuing | review | error
@@ -272,7 +272,7 @@ function UrlMode({ onBack, addRecipe, navigate }) {
           >
             <span className={`w-2 h-2 rounded-full flex-shrink-0 ${cobaltReachable ? 'bg-emerald-500' : 'bg-rose-500'}`} />
             <span className="flex-1 text-xs font-medium text-gray-700 dark:text-stone-300">
-              {cobaltReachable ? 'Home server reachable — instant extraction' : 'Home server unreachable — will queue'}
+              {cobaltStatusLabel({ reachable: cobaltReachable, reason: cobaltReason, version: cobaltVersion })}
             </span>
             <RefreshCw size={12} className={`text-warm-400 dark:text-stone-500 ${checkingCobalt ? 'animate-spin' : ''}`} />
           </button>

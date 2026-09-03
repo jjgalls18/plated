@@ -22,10 +22,33 @@ export default async function handler(req, res) {
   try {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 6000)
-    const cobaltRes = await fetch(url, { headers, signal: controller.signal })
+    // redirect: 'manual' matters. An expired or wrong Cloudflare Access service
+    // token doesn't fail the request — Access answers 302 to its login page,
+    // and following that returns a perfectly "ok" HTML page, which would report
+    // the home server as reachable and send every extraction into a request
+    // that can't succeed.
+    const cobaltRes = await fetch(url, { headers, signal: controller.signal, redirect: 'manual' })
     clearTimeout(timeout)
-    return res.status(200).json({ reachable: cobaltRes.ok })
-  } catch {
-    return res.status(200).json({ reachable: false, reason: 'unreachable' })
+
+    if (cobaltRes.status >= 300 && cobaltRes.status < 400) {
+      return res.status(200).json({ reachable: false, reason: 'auth_rejected' })
+    }
+    if (!cobaltRes.ok) {
+      return res.status(200).json({ reachable: false, reason: 'bad_status', status: cobaltRes.status })
+    }
+
+    // Only a real Cobalt instance returns its own identity JSON — a proxy,
+    // captive portal or error page can just as easily answer 200.
+    const body = await cobaltRes.json().catch(() => null)
+    if (!body?.cobalt) {
+      return res.status(200).json({ reachable: false, reason: 'not_cobalt' })
+    }
+
+    return res.status(200).json({ reachable: true, version: body.cobalt.version })
+  } catch (err) {
+    return res.status(200).json({
+      reachable: false,
+      reason: err?.name === 'AbortError' ? 'timeout' : 'unreachable',
+    })
   }
 }
