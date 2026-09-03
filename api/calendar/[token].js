@@ -41,7 +41,7 @@ export default async function handler(req, res) {
   if (!token) return res.status(400).send('Missing token')
 
   const admin = supabaseAdmin()
-  if (!admin) return res.status(500).send('Calendar feed not configured — missing SUPABASE_SERVICE_ROLE_KEY')
+  if (!admin) return res.status(500).send('Calendar feed not configured — no Supabase service-role key found in the environment')
 
   const { data: profile } = await admin
     .from('profiles')
