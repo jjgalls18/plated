@@ -232,58 +232,32 @@ export async function extractCaptionPartial(url, { anthropicApiKey, savedRecipes
  * about what's redundant vs. what the transcript adds/corrects.
  */
 export async function mergeQueuedRecipe({ partialRecipe, transcript, sourceUrl, anthropicApiKey, logAiCost }) {
-  const response = await fetch('/api/anthropic', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', ...(await authHeaders()) },
-    body: JSON.stringify({
-      apiKey: anthropicApiKey,
-      model: 'claude-sonnet-5',
-      max_tokens: 2000,
-      messages: [{
-        role: 'user',
-        content: `You extracted a PARTIAL recipe from a social media caption earlier. Now you have the
+  const response = await postToClaude({
+    apiKey: anthropicApiKey,
+    model: 'claude-sonnet-5',
+    max_tokens: 8000,
+    output_config: RECIPE_OUTPUT_CONFIG,
+    messages: [{
+      role: 'user',
+      content: `You extracted a PARTIAL recipe from a social media caption earlier. Now you have the
 full video transcript too. Merge them into one final, complete recipe — the transcript is the
 more reliable/complete source, so prefer it whenever it conflicts with the partial version, but
 keep anything useful from the partial that the transcript doesn't mention. Do not duplicate
 ingredients or steps that describe the same thing.
 
-Return ONLY valid JSON, no markdown, no explanation, in this exact format:
-{
-  "title": "Recipe name",
-  "description": "1-2 sentence description",
-  "prep_time": 10,
-  "cook_time": 20,
-  "servings": 4,
-  "tags": ["tag1", "tag2"],
-  "ingredients": [{ "amount": "2 cups", "name": "all-purpose flour" }],
-  "steps": ["Step 1 description", "Step 2 description"],
-  "confidence": 0.9
-}
+Leave "error" null — you already have a recipe here.
 
 PARTIAL RECIPE (from caption):
 ${JSON.stringify(partialRecipe, null, 2)}
 
 FULL TRANSCRIPT (from video audio):
 ${transcript.slice(0, 7000)}`,
-      }],
-    }),
-  })
-
-  if (!response.ok) {
-    throw await apiError(response, 'Claude API error')
-  }
+    }],
+  }, 'Merging the recipe')
 
   const data = await response.json()
   logAiCost?.(computeCost('claude-sonnet-5', data.usage), 'video_merge')
-  const raw = data.content?.[0]?.text?.trim() ?? ''
-  const content = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
-
-  let recipe
-  try {
-    recipe = JSON.parse(content)
-  } catch {
-    throw new Error('Could not parse merged recipe from response')
-  }
+  const recipe = parseRecipeResponse(data, 'The merged recipe')
 
   return {
     ...recipe,
@@ -292,6 +266,105 @@ ${transcript.slice(0, 7000)}`,
     steps: recipe.steps || [],
     tags: recipe.tags || [],
     confidence: recipe.confidence ?? 1.0,
+  }
+}
+
+/**
+ * Schema for structured outputs, which constrain the model's response to valid
+ * JSON rather than asking for it in the prompt and hoping. Parsing free-form
+ * output failed in practice ("Could not parse recipe from response"): a fenced
+ * block, a sentence of preamble, or a response truncated at max_tokens all
+ * produce text that JSON.parse rejects.
+ *
+ * Constraints the API enforces on these schemas: every object needs
+ * additionalProperties:false and must list all its properties in `required`.
+ * "No recipe found" therefore can't be a differently-shaped response — it's the
+ * nullable `error` field, with the other fields left empty.
+ */
+const RECIPE_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['error', 'title', 'description', 'prep_time', 'cook_time', 'servings', 'tags', 'ingredients', 'steps', 'confidence'],
+  properties: {
+    // anyOf rather than a ["integer", "null"] type union: anyOf is documented
+    // as supported, type-unions aren't, and a schema the API rejects would 400
+    // every extraction rather than just the ones that used to fail parsing.
+    error: { anyOf: [{ type: 'string' }, { type: 'null' }], description: 'Set only when no recipe is present; otherwise null' },
+    title: { type: 'string' },
+    description: { type: 'string' },
+    prep_time: { anyOf: [{ type: 'integer' }, { type: 'null' }], description: 'Minutes' },
+    cook_time: { anyOf: [{ type: 'integer' }, { type: 'null' }], description: 'Minutes' },
+    servings: { anyOf: [{ type: 'integer' }, { type: 'null' }] },
+    tags: { type: 'array', items: { type: 'string' } },
+    ingredients: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['amount', 'name'],
+        properties: {
+          amount: { type: 'string' },
+          name: { type: 'string' },
+        },
+      },
+    },
+    steps: { type: 'array', items: { type: 'string' } },
+    confidence: { type: 'number', description: '0.0-1.0 completeness' },
+  },
+}
+
+const RECIPE_OUTPUT_CONFIG = { format: { type: 'json_schema', schema: RECIPE_SCHEMA } }
+
+/**
+ * Posts to /api/anthropic, retrying once without the schema if the API rejects
+ * it. Structured outputs can't be verified from here (no key at build time), and
+ * a schema this endpoint won't accept would turn an intermittent parse failure
+ * into a total outage — so a 400 falls back to the prompt-only path, which still
+ * gets the raised token budget and the fenced-JSON handling.
+ */
+async function postToClaude(body, fallbackLabel) {
+  const headers = { 'content-type': 'application/json', ...(await authHeaders()) }
+  const send = (payload) => fetch('/api/anthropic', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload),
+  })
+
+  let response = await send(body)
+
+  if (response.status === 400 && body.output_config) {
+    const withoutSchema = { ...body }
+    delete withoutSchema.output_config
+    const retry = await send(withoutSchema)
+    if (retry.ok) return retry
+    response = retry
+  }
+
+  if (!response.ok) throw await apiError(response, `${fallbackLabel} failed`)
+  return response
+}
+
+/**
+ * Reads a recipe out of a Claude response. Structured outputs make the JSON
+ * well-formed, but a response cut off at max_tokens is still truncated JSON —
+ * that shows up as stop_reason, not as a parse error, so check it first and say
+ * so plainly instead of reporting an unparseable response.
+ */
+function parseRecipeResponse(data, fallbackLabel) {
+  if (data.stop_reason === 'max_tokens') {
+    throw new Error(`${fallbackLabel} was cut off before it finished — the recipe is longer than the token budget allows`)
+  }
+
+  const raw = data.content?.find((b) => b.type === 'text')?.text?.trim() ?? ''
+  const content = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
+
+  try {
+    return JSON.parse(content)
+  } catch {
+    const snippet = content.slice(0, 200)
+    throw new Error(snippet
+      ? `Could not read the recipe from Claude's response — it replied: ${snippet}`
+      : `Claude returned an empty response (stop_reason: ${data.stop_reason || 'unknown'})`)
   }
 }
 
@@ -329,46 +402,27 @@ export async function extractRecipeFromText(text, anthropicApiKey, sourceUrl, sa
     ? `\nThis text is a social media post's caption/page dump, not a full recipe write-up — it will
 often be incomplete or missing measurements entirely. That's expected. Extract whatever you can
 even if it's just a dish name and a rough ingredient list; set "confidence" low (0.1-0.4) to
-reflect that. Only return { "error": "No recipe found" } if there's truly no food/dish mentioned
-at all.\n`
+reflect that. Only set "error" if there's truly no food/dish mentioned at all.\n`
     : ''
 
-  const response = await fetch('/api/anthropic', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', ...(await authHeaders()) },
-    body: JSON.stringify({
-      apiKey: anthropicApiKey,
-      model,
-      max_tokens: 2000,
-      messages: [{
-        role: 'user',
-        content: `Extract the recipe from this text. Return ONLY valid JSON, no markdown, no explanation.
+  const response = await postToClaude({
+    apiKey: anthropicApiKey,
+    model,
+    // Recipes with many steps plus the few-shot block regularly ran past the
+    // old 2000-token cap, and a response truncated mid-JSON is unparseable.
+    max_tokens: 8000,
+    output_config: RECIPE_OUTPUT_CONFIG,
+    messages: [{
+      role: 'user',
+      content: `Extract the recipe from this text.
 ${captionNote}${fewShot}
-JSON format:
-{
-  "title": "Recipe name",
-  "description": "1-2 sentence description",
-  "prep_time": 10,
-  "cook_time": 20,
-  "servings": 4,
-  "tags": ["tag1", "tag2"],
-  "ingredients": [
-    { "amount": "2 cups", "name": "all-purpose flour" }
-  ],
-  "steps": [
-    "Step 1 description",
-    "Step 2 description"
-  ],
-  "confidence": 0.9
-}
-
 Rules:
-- prep_time and cook_time are integers in minutes (null if unknown)
-- servings is an integer (null if unknown)
+- prep_time and cook_time are in minutes (null if unknown)
+- servings is a whole number (null if unknown)
 - tags should be 1-3 relevant tags like "italian", "quick", "chicken", "date night"
 - steps should be clear, actionable sentences
 - confidence: a decimal 0.0–1.0 reflecting completeness. 1.0 = all measurements clear and steps complete. 0.7 = most measurements present, minor gaps. 0.4 = significant measurements missing or steps vague. 0.2 = heavy estimation required.
-- If you cannot find a recipe in the text, return { "error": "No recipe found" }
+- Leave "error" null when you find a recipe. If there is no recipe in the text, set "error" to a short explanation and leave the other fields empty ("" for text, null for numbers, [] for lists).
 
 Quantity inference rules (apply these when measurements are missing or vague):
 - Use your culinary knowledge to estimate standard amounts based on the dish type and servings
@@ -380,25 +434,12 @@ Quantity inference rules (apply these when measurements are missing or vague):
 
 Text to extract from:
 ${text.slice(0, 7000)}`,
-      }],
-    }),
-  })
-
-  if (!response.ok) {
-    throw await apiError(response, 'Claude API error')
-  }
+    }],
+  }, 'Recipe extraction')
 
   const data = await response.json()
   logAiCost?.(computeCost(model, data.usage), feature)
-  const raw = data.content?.[0]?.text?.trim() ?? ''
-  const content = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
-
-  let recipe
-  try {
-    recipe = JSON.parse(content)
-  } catch {
-    throw new Error('Could not parse recipe from response')
-  }
+  const recipe = parseRecipeResponse(data, 'The recipe')
 
   if (recipe.error) throw new Error(errorText(recipe.error, 'Could not find a recipe in that'))
 
