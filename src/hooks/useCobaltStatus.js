@@ -35,6 +35,7 @@ export function useCobaltStatus() {
     reachable: !!query.data?.reachable,
     reason: query.data?.reason || null,
     version: query.data?.version || null,
+    data: query.data ?? null,
     isLoading: query.isLoading,
     checking: query.isFetching,
     refresh: query.refetch,
@@ -60,8 +61,13 @@ export function cobaltStatusLabel({ reachable, reason, version }) {
       return 'Home server timed out — will queue'
     case 'bad_status':
       return 'Home server returned an error — will queue'
+    case 'status_check_failed':
+      return 'Status check failed — sign-in may have expired; will queue'
+    // Never render a bare "unreachable": it reads identically to the label
+    // this app showed before reasons existed, so it can't distinguish a real
+    // network failure from a device running a stale build.
     default:
-      return 'Home server unreachable — will queue'
+      return `Home server unreachable${reason ? ` (${reason})` : ' (no reason reported)'} — will queue`
   }
 }
 

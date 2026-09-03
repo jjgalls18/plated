@@ -9,6 +9,7 @@ import { useAppStore, calculateAiCosts } from '../stores/useAppStore'
 import { useGrocery } from '../hooks/useGrocery'
 import { useRecipes } from '../hooks/useRecipes'
 import { useMealPlan } from '../hooks/useMealPlan'
+import { useCobaltStatus } from '../hooks/useCobaltStatus'
 import { isSupabaseConfigured } from '../lib/supabase'
 import { MOCK_RECIPES } from '../data/mockRecipes'
 import PlatedLogo from '../components/ui/PlatedLogo'
@@ -210,6 +211,36 @@ function UsageTab({ aiCostLog, aiCosts, clearAiCostLog }) {
   )
 }
 
+/**
+ * Ground truth for "why is the home server red?" — the exact response from
+ * /api/cobalt-status plus the build actually running on this device. Reasoning
+ * about which of those is at fault from the outside repeatedly went wrong; this
+ * just shows both.
+ */
+function HomeServerCard() {
+  const { data, checking, refresh } = useCobaltStatus()
+
+  return (
+    <div className="bg-white dark:bg-stone-800 rounded-2xl shadow-card p-5">
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-xs font-semibold text-warm-400 dark:text-stone-500 uppercase tracking-wide">
+          Home server
+        </p>
+        <button
+          onClick={() => refresh()}
+          className="text-primary text-xs font-semibold active:scale-95 transition-transform"
+        >
+          {checking ? 'Checking…' : 'Re-check'}
+        </button>
+      </div>
+      <pre className="text-[10px] font-mono text-gray-700 dark:text-stone-300 whitespace-pre-wrap break-all">
+        {data ? JSON.stringify(data, null, 2) : 'no response yet'}
+      </pre>
+      <p className="text-warm-400/70 dark:text-stone-600 text-[10px] mt-3 font-mono">build {__BUILD_ID__}</p>
+    </div>
+  )
+}
+
 function HealthTab({ recipes, groceryListsGenerated, mealPlan }) {
   const totalCooked = recipes.reduce((sum, r) => sum + (r.made_count || 0), 0)
   const mealSlotsPlanned = Object.values(mealPlan || {}).reduce((sum, day) => sum + Object.keys(day).length, 0)
@@ -225,6 +256,8 @@ function HealthTab({ recipes, groceryListsGenerated, mealPlan }) {
 
   return (
     <div className="space-y-4">
+      <HomeServerCard />
+
       <div className="grid grid-cols-2 gap-3">
         {[
           { label: 'Recipes saved',      value: recipes.length },
