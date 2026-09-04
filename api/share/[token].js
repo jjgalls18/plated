@@ -47,6 +47,18 @@ export default async function handler(req, res) {
     return res.status(500).json({ ok: false, error: 'Sharing is not configured — no Supabase service-role key in the environment' })
   }
 
+  // Authorize before inspecting anything the caller sent, so an unauthenticated
+  // request can't learn how this endpoint reacts to different input. Legitimate
+  // shortcuts always hold a valid token, so they still get the specific
+  // link-shaped errors below.
+  const { data: profile } = await admin
+    .from('profiles')
+    .select('id')
+    .eq('share_token', token)
+    .single()
+
+  if (!profile) return res.status(404).json({ ok: false, error: 'Not found' })
+
   // The body may be parsed JSON, a raw string, or absent if the URL came as a
   // query param — Shortcuts can be configured any of those ways.
   const raw = req.body?.url ?? req.query.url ?? (typeof req.body === 'string' ? req.body : null)
@@ -58,16 +70,6 @@ export default async function handler(req, res) {
   if (!isSupportedVideo(url)) {
     return res.status(400).json({ ok: false, error: 'Only TikTok, Instagram and YouTube links can be saved this way' })
   }
-
-  const { data: profile } = await admin
-    .from('profiles')
-    .select('id')
-    .eq('share_token', token)
-    .single()
-
-  // Deliberately vague: an invalid token shouldn't confirm whether it's the
-  // token or the link that's wrong.
-  if (!profile) return res.status(404).json({ ok: false, error: 'Not found' })
 
   // Sharing the same video twice is easy to do by accident and costs a
   // Whisper transcription each time.
