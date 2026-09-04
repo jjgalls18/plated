@@ -217,6 +217,36 @@ export default function RecipeDetail() {
 
       {/* Content */}
       <div className="px-5 -mt-6 relative">
+        {recipe.needs_review && (
+          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40 rounded-2xl p-4 mb-3">
+            <p className="text-amber-800 dark:text-amber-300 text-xs font-semibold mb-1">
+              Worth a check before you cook
+            </p>
+            <p className="text-amber-700 dark:text-amber-400 text-xs leading-relaxed mb-3">
+              {typeof recipe.confidence === 'number'
+                ? `The extraction was ${Math.round(recipe.confidence * 100)}% confident — some amounts or steps were estimated.`
+                : 'Some amounts or steps may have been estimated.'}
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => navigate(`/recipe/${recipe.id}/edit`)}
+                className="flex-1 py-2 bg-amber-500 text-white rounded-xl text-xs font-semibold active:scale-95 transition-transform"
+              >
+                Review &amp; edit
+              </button>
+              <button
+                onClick={() => {
+                  updateRecipe.mutate({ id: recipe.id, needs_review: false })
+                  toast.success('Marked as checked')
+                }}
+                className="flex-1 py-2 bg-white dark:bg-stone-800 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/40 rounded-xl text-xs font-semibold active:scale-95 transition-transform"
+              >
+                Looks right
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="bg-white dark:bg-stone-800 rounded-3xl shadow-soft p-5 mb-4">
           {recipe.tags?.length > 0 && (
             <div className="flex gap-2 flex-wrap mb-3">

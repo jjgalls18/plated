@@ -63,6 +63,15 @@ export function useRecipe(id) {
 }
 
 // --- Add recipe ---
+/**
+ * PostgREST reports an unknown column as PGRST204, or as Postgres 42703 when it
+ * reaches the database. Either means the schema is older than this code.
+ */
+function isMissingColumnError(error) {
+  return error?.code === 'PGRST204' || error?.code === '42703' ||
+    /column .* does not exist|could not find the '.*' column/i.test(error?.message || '')
+}
+
 export function useAddRecipe() {
   const qc = useQueryClient()
   return useMutation({
@@ -80,6 +89,20 @@ export function useAddRecipe() {
       }
 
       const { data, error } = await supabase.from('recipes').insert(recipe).select().single()
+
+      // The review columns arrive via a migration that has to be run by hand in
+      // the Supabase SQL editor, so this code can reach production first. Rather
+      // than breaking every save until the migration lands, drop the two fields
+      // and retry — a recipe saved without its review flag beats no recipe.
+      if (error && isMissingColumnError(error) && ('needs_review' in recipe || 'confidence' in recipe)) {
+        const withoutReview = { ...recipe }
+        delete withoutReview.needs_review
+        delete withoutReview.confidence
+        const retry = await supabase.from('recipes').insert(withoutReview).select().single()
+        if (retry.error) throw retry.error
+        return retry.data
+      }
+
       if (error) throw error
       return data
     },

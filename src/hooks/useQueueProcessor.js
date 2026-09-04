@@ -5,11 +5,17 @@ import { useCobaltStatus } from './useCobaltStatus'
 import { useRecipes, useAddRecipe } from './useRecipes'
 import { useAppStore } from '../stores/useAppStore'
 import { useQueueProgress } from '../stores/useQueueProgress'
+import { useErrorLog } from '../stores/useErrorLog'
 
 // Two tries per video per session. Without a cap, an item that fails and gets
 // put back would be picked up again immediately, and a persistent failure would
 // spend Whisper and Claude credits in a loop.
 const MAX_ATTEMPTS = 2
+
+// Below this, the extraction prompt's own scale says measurements are missing
+// or steps are vague (0.7 = "most measurements present, minor gaps"), which is
+// exactly the case worth a second pair of eyes before cooking from it.
+const REVIEW_THRESHOLD = 0.7
 
 /**
  * Drains the video queue in the background, one item at a time, and starts the
@@ -30,6 +36,7 @@ export function useQueueProcessor() {
   const clearProgress = useQueueProgress((s) => s.clear)
   const attempts = useQueueProgress((s) => s.attempts)
   const noteAttempt = useQueueProgress((s) => s.noteAttempt)
+  const logError = useErrorLog((s) => s.logError)
 
   const busy = useRef(false)
   // Bumped after every run to re-trigger the effect. Without it the queue
@@ -44,7 +51,7 @@ export function useQueueProcessor() {
   const latest = useRef(null)
   latest.current = {
     items, claimQueueItem, updateQueueItem, savedRecipes, addRecipe,
-    anthropicApiKey, openaiApiKey, logAiCost, setProgress, clearProgress, noteAttempt,
+    anthropicApiKey, openaiApiKey, logAiCost, setProgress, clearProgress, noteAttempt, logError,
   }
 
   const ready = reachable && aiEnabled && !!anthropicApiKey && !!openaiApiKey
@@ -66,13 +73,15 @@ export function useQueueProcessor() {
       }
 
       ctx.noteAttempt(item.id)
+      let currentStep = 'Starting'
+      const step = (label) => { currentStep = label; ctx.setProgress(item.id, label) }
 
       try {
         // Whoever claims it first runs it; the other device skips.
         const claimed = await ctx.claimQueueItem(item.id)
         if (!claimed) return
 
-        ctx.setProgress(item.id, 'Starting…')
+        step('Starting…')
 
         // Loaded on demand so the extraction code stays out of the initial
         // bundle — this hook mounts on every route.
@@ -81,10 +90,10 @@ export function useQueueProcessor() {
 
         const transcript = await transcribeVideoAudio(item.url, {
           openaiApiKey: ctx.openaiApiKey,
-          onStep: (step) => ctx.setProgress(item.id, step),
+          onStep: step,
         })
 
-        ctx.setProgress(item.id, 'Extracting recipe with Claude…')
+        step('Extracting recipe with Claude…')
 
         const recipe = item.partial_recipe
           ? await mergeQueuedRecipe({
@@ -102,7 +111,7 @@ export function useQueueProcessor() {
               { model: 'claude-sonnet-5', feature: 'video_extraction', logAiCost: ctx.logAiCost },
             )
 
-        ctx.setProgress(item.id, 'Saving…')
+        step('Saving…')
 
         const saved = await ctx.addRecipe.mutateAsync({
           title: recipe.title,
@@ -115,6 +124,8 @@ export function useQueueProcessor() {
           prep_time: recipe.prep_time || null,
           cook_time: recipe.cook_time || null,
           servings: recipe.servings || null,
+          confidence: typeof recipe.confidence === 'number' ? recipe.confidence : null,
+          needs_review: typeof recipe.confidence === 'number' && recipe.confidence < REVIEW_THRESHOLD,
         })
 
         await ctx.updateQueueItem(item.id, {
@@ -122,7 +133,8 @@ export function useQueueProcessor() {
           transcript_text: transcript,
           final_recipe_id: saved.id,
         })
-        toast.success(`Saved “${recipe.title}”`)
+        const unsure = typeof recipe.confidence === 'number' && recipe.confidence < REVIEW_THRESHOLD
+        toast.success(unsure ? `Saved “${recipe.title}” — worth a review` : `Saved “${recipe.title}”`)
       } catch (err) {
         const { describeError } = await import('../lib/extraction')
 
@@ -130,9 +142,12 @@ export function useQueueProcessor() {
         // rather than burning an attempt's worth of blame on it.
         if (err?.cobaltUnreachable) {
           await ctx.updateQueueItem(item.id, { status: item.partial_recipe ? 'partial' : 'queued' }).catch(() => {})
+          ctx.logError({ source: 'video', url: item.url, step: currentStep, message: 'Home server went offline mid-extraction — put back in the queue' })
         } else {
-          await ctx.updateQueueItem(item.id, { status: 'failed', error_message: describeError(err) }).catch(() => {})
-          toast.error(describeError(err))
+          const message = describeError(err)
+          await ctx.updateQueueItem(item.id, { status: 'failed', error_message: `${currentStep}: ${message}` }).catch(() => {})
+          ctx.logError({ source: 'video', url: item.url, step: currentStep, message, detail: err?.stack?.split('\n')[0] || null })
+          toast.error(message)
         }
       } finally {
         ctx.clearProgress()

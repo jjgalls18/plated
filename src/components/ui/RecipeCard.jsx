@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Clock, Star, ChefHat, Heart } from 'lucide-react'
+import { Clock, Star, ChefHat, Heart, AlertCircle } from 'lucide-react'
 import { useUpdateRecipe } from '../../hooks/useRecipes'
 
 function getGradient(title = '') {
@@ -75,6 +75,12 @@ export default function RecipeCard({ recipe }) {
             <div className="absolute bottom-3 left-3 bg-black/50 rounded-full px-2.5 py-1 flex items-center gap-1">
               <Clock size={11} className="text-white" />
               <span className="text-[11px] font-medium text-white">{totalTime} min</span>
+            </div>
+          )}
+          {recipe.needs_review && (
+            <div className="absolute bottom-3 right-3 bg-amber-500 rounded-full px-2.5 py-1 flex items-center gap-1">
+              <AlertCircle size={11} className="text-white" />
+              <span className="text-[11px] font-semibold text-white">Review</span>
             </div>
           )}
         </div>

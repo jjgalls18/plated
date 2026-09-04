@@ -10,6 +10,7 @@ import { useGrocery } from '../hooks/useGrocery'
 import { useRecipes } from '../hooks/useRecipes'
 import { useMealPlan } from '../hooks/useMealPlan'
 import { useCobaltStatus } from '../hooks/useCobaltStatus'
+import { useErrorLog, formatErrorEntry } from '../stores/useErrorLog'
 import { isSupabaseConfigured } from '../lib/supabase'
 import { MOCK_RECIPES } from '../data/mockRecipes'
 import PlatedLogo from '../components/ui/PlatedLogo'
@@ -241,6 +242,71 @@ function HomeServerCard() {
   )
 }
 
+/**
+ * What failed, when, and at which step. Toasts disappear and queue rows get
+ * deleted, so without this a failure leaves nothing behind to reason about.
+ */
+function ErrorLogCard() {
+  const { entries, clearErrors } = useErrorLog()
+  const [expanded, setExpanded] = useState(null)
+
+  const copyAll = async () => {
+    try {
+      await navigator.clipboard.writeText(entries.map(formatErrorEntry).join('\n\n'))
+      toast.success('Copied')
+    } catch {
+      toast.error('Could not copy')
+    }
+  }
+
+  return (
+    <div className="bg-white dark:bg-stone-800 rounded-2xl shadow-card p-5">
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-xs font-semibold text-warm-400 dark:text-stone-500 uppercase tracking-wide">
+          Recent problems {entries.length > 0 && `(${entries.length})`}
+        </p>
+        {entries.length > 0 && (
+          <div className="flex gap-3">
+            <button onClick={copyAll} className="text-primary text-xs font-semibold active:scale-95 transition-transform">Copy all</button>
+            <button onClick={clearErrors} className="text-warm-400 dark:text-stone-500 text-xs font-semibold active:scale-95 transition-transform">Clear</button>
+          </div>
+        )}
+      </div>
+
+      {entries.length === 0 ? (
+        <p className="text-warm-400 dark:text-stone-500 text-xs">Nothing has failed recently.</p>
+      ) : (
+        <div className="space-y-2">
+          {entries.map((e) => (
+            <button
+              key={e.id}
+              onClick={() => setExpanded(expanded === e.id ? null : e.id)}
+              className="w-full text-left border-b border-warm-100 dark:border-stone-700 last:border-0 pb-2 last:pb-0"
+            >
+              <div className="flex items-baseline gap-2">
+                <span className="text-[10px] font-mono text-warm-400 dark:text-stone-500 flex-shrink-0">
+                  {new Date(e.at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                </span>
+                <span className="text-[10px] font-semibold text-rose-500 uppercase flex-shrink-0">{e.source}</span>
+              </div>
+              {e.step && <p className="text-[11px] text-warm-500 dark:text-stone-400 mt-0.5">Failed at: {e.step}</p>}
+              <p className={`text-xs text-gray-800 dark:text-stone-200 mt-0.5 ${expanded === e.id ? 'break-words' : 'truncate'}`}>
+                {e.message}
+              </p>
+              {expanded === e.id && (
+                <div className="mt-1.5 space-y-1">
+                  {e.url && <p className="text-[10px] font-mono text-warm-400 dark:text-stone-500 break-all">{e.url}</p>}
+                  {e.detail && <p className="text-[10px] font-mono text-warm-400 dark:text-stone-500 break-all">{e.detail}</p>}
+                </div>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function HealthTab({ recipes, groceryListsGenerated, mealPlan }) {
   const totalCooked = recipes.reduce((sum, r) => sum + (r.made_count || 0), 0)
   const mealSlotsPlanned = Object.values(mealPlan || {}).reduce((sum, day) => sum + Object.keys(day).length, 0)
@@ -257,6 +323,7 @@ function HealthTab({ recipes, groceryListsGenerated, mealPlan }) {
   return (
     <div className="space-y-4">
       <HomeServerCard />
+      <ErrorLogCard />
 
       <div className="grid grid-cols-2 gap-3">
         {[
