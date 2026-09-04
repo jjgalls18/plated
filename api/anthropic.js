@@ -14,7 +14,11 @@
 
 import { requireUser } from './_verifyAuth.js'
 
-export const config = { maxDuration: 30 }
+// Matches /api/transcribe. Recipe extraction on Sonnet 5 with an 8k token
+// ceiling can run past 30s — a merge of a full caption plus a full transcript
+// timed out at the old limit and lost the extraction after Whisper had already
+// been paid for.
+export const config = { maxDuration: 60 }
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {

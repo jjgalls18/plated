@@ -88,10 +88,20 @@ export function useQueueProcessor() {
         const { transcribeVideoAudio, buildVideoSource, extractRecipeFromText, mergeQueuedRecipe } =
           await import('../lib/extraction')
 
-        const transcript = await transcribeVideoAudio(item.url, {
-          openaiApiKey: ctx.openaiApiKey,
-          onStep: step,
-        })
+        // Reuse a transcript from an earlier attempt. Whisper is the paid,
+        // slow part; when a later step fails (a Claude timeout, say) there is no
+        // reason to buy the same audio twice on retry.
+        let transcript = item.transcript_text?.trim() || null
+        if (transcript) {
+          step('Reusing transcript from last attempt…')
+        } else {
+          transcript = await transcribeVideoAudio(item.url, {
+            openaiApiKey: ctx.openaiApiKey,
+            onStep: step,
+          })
+          // Banked immediately, before anything downstream can fail.
+          await ctx.updateQueueItem(item.id, { transcript_text: transcript }).catch(() => {})
+        }
 
         step('Extracting recipe with Claude…')
 

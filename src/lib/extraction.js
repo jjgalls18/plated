@@ -270,11 +270,10 @@ export async function extractCaptionPartial(url, { anthropicApiKey, savedRecipes
  * about what's redundant vs. what the transcript adds/corrects.
  */
 export async function mergeQueuedRecipe({ partialRecipe, transcript, sourceUrl, anthropicApiKey, logAiCost }) {
-  const response = await postToClaude({
+  const response = await postToClaude(tunedBody({
     apiKey: anthropicApiKey,
     model: 'claude-sonnet-5',
     max_tokens: 8000,
-    output_config: RECIPE_OUTPUT_CONFIG,
     messages: [{
       role: 'user',
       content: `You extracted a PARTIAL recipe from a social media caption earlier. Now you have the
@@ -291,7 +290,7 @@ ${JSON.stringify(partialRecipe, null, 2)}
 FULL TRANSCRIPT (from video audio):
 ${transcript.slice(0, 7000)}`,
     }],
-  }, 'Merging the recipe')
+  }), 'Merging the recipe')
 
   const data = await response.json()
   logAiCost?.(computeCost('claude-sonnet-5', data.usage), 'video_merge')
@@ -352,6 +351,36 @@ const RECIPE_SCHEMA = {
 }
 
 const RECIPE_OUTPUT_CONFIG = { format: { type: 'json_schema', schema: RECIPE_SCHEMA } }
+
+/**
+ * Per-model request tuning.
+ *
+ * Sonnet 5 runs adaptive thinking by default at `high` effort. Nothing here
+ * asked for that, and on a merge — a full caption plus a full transcript, with
+ * an 8k token ceiling — it was slow enough to blow the serverless function's
+ * timeout and lose an extraction Whisper had already been paid for. Extraction
+ * is a structured task constrained by a schema, so `medium` is ample.
+ *
+ * Deliberately keyed by model: Haiku 4.5 rejects `effort` with a 400, and it's
+ * the model behind web pages and caption pre-processing. Sending it these
+ * fields would break both.
+ */
+const MODEL_TUNING = {
+  'claude-sonnet-5': { thinking: { type: 'adaptive' }, effort: 'medium' },
+}
+
+function tunedBody({ model, ...rest }) {
+  const tuning = MODEL_TUNING[model]
+  return {
+    ...rest,
+    model,
+    ...(tuning?.thinking ? { thinking: tuning.thinking } : {}),
+    output_config: {
+      ...RECIPE_OUTPUT_CONFIG,
+      ...(tuning?.effort ? { effort: tuning.effort } : {}),
+    },
+  }
+}
 
 /**
  * Posts to /api/anthropic, retrying once without the schema if the API rejects
@@ -443,13 +472,12 @@ even if it's just a dish name and a rough ingredient list; set "confidence" low 
 reflect that. Only set "error" if there's truly no food/dish mentioned at all.\n`
     : ''
 
-  const response = await postToClaude({
+  const response = await postToClaude(tunedBody({
     apiKey: anthropicApiKey,
     model,
     // Recipes with many steps plus the few-shot block regularly ran past the
     // old 2000-token cap, and a response truncated mid-JSON is unparseable.
     max_tokens: 8000,
-    output_config: RECIPE_OUTPUT_CONFIG,
     messages: [{
       role: 'user',
       content: `Extract the recipe from this text.
@@ -473,7 +501,7 @@ Quantity inference rules (apply these when measurements are missing or vague):
 Text to extract from:
 ${text.slice(0, 7000)}`,
     }],
-  }, 'Recipe extraction')
+  }), 'Recipe extraction')
 
   const data = await response.json()
   logAiCost?.(computeCost(model, data.usage), feature)
