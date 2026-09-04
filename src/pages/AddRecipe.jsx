@@ -5,7 +5,7 @@ import { useAddRecipe, useRecipes } from '../hooks/useRecipes'
 import { useAppStore } from '../stores/useAppStore'
 import { useCobaltStatus, cobaltStatusLabel } from '../hooks/useCobaltStatus'
 import { useVideoQueue } from '../hooks/useVideoQueue'
-import { extractFromVideo, extractFromWeb, extractCaptionPartial, isVideoUrl, authHeaders, errorText, describeError } from '../lib/extraction'
+import { extractFromWeb, extractCaptionPartial, isVideoUrl, authHeaders, errorText, describeError } from '../lib/extraction'
 import { computeCost } from '../lib/aiCost'
 import ThumbnailPicker from '../components/ui/ThumbnailPicker'
 import toast from 'react-hot-toast'
@@ -83,17 +83,18 @@ function UrlMode({ onBack, addRecipe, navigate }) {
   const [saving, setSaving] = useState(false)
 
   const isVideo = isVideoUrl(url)
-  const willQueue = isVideo && !cobaltReachable
-  // Queueing only needs the Anthropic key (for caption pre-processing) —
-  // the OpenAI key isn't needed until Cobalt actually transcribes it later.
-  const hasKeys = aiEnabled && (isVideo ? (willQueue ? !!anthropicApiKey : anthropicApiKey && openaiApiKey) : !!anthropicApiKey)
+  // Videos always queue now. Extraction runs in the background and the queue
+  // drains itself, so several links can be added back to back instead of
+  // watching one extract at a time.
+  const willQueue = isVideo
+  const hasKeys = aiEnabled && (isVideo ? !!(anthropicApiKey && openaiApiKey) : !!anthropicApiKey)
 
   const handleQuickSave = async () => {
     if (!url.trim()) return
     setStage('queuing')
     try {
       const queued = await addToQueue({ url, status: 'queued' })
-      toast.success('Saved to queue!')
+      toast.success(cobaltReachable ? 'Added — extracting in the background' : 'Saved to queue!')
       setUrl('')
       setStage('input')
       // Pre-process from the caption in the background — don't block the
@@ -103,7 +104,8 @@ function UrlMode({ onBack, addRecipe, navigate }) {
           if (partial) updateQueueItem(queued.id, { status: 'partial', caption_text: partial.description || null, partial_recipe: partial })
         })
         .catch(() => {})
-      navigate('/queue')
+      // Deliberately stays on this screen rather than navigating to the queue —
+      // the whole point is to paste the next link straight away.
     } catch (err) {
       toast.error(err.message || 'Could not save to queue')
       setStage('input')
@@ -116,36 +118,22 @@ function UrlMode({ onBack, addRecipe, navigate }) {
       toast.error('AI is turned off — enable it in admin settings (tap logo 5×)')
       return
     }
+    // Videos queue and extract in the background. Only web pages still extract
+    // inline, because that takes seconds rather than a minute.
     if (willQueue) return handleQuickSave()
+
     setStage('processing')
     setStepLabel('')
     try {
-      let recipe
-      if (isVideo) {
-        recipe = await extractFromVideo(url, {
-          anthropicApiKey,
-          openaiApiKey,
-          onStep: setStepLabel,
-          savedRecipes,
-          logAiCost,
-        })
-      } else {
-        recipe = await extractFromWeb(url, {
-          anthropicApiKey,
-          onStep: setStepLabel,
-          savedRecipes,
-          logAiCost,
-        })
-      }
+      const recipe = await extractFromWeb(url, {
+        anthropicApiKey,
+        onStep: setStepLabel,
+        savedRecipes,
+        logAiCost,
+      })
       setExtracted(recipe)
       setStage('review')
     } catch (err) {
-      // Cobalt went down between the status check and this request — queue
-      // instead of showing a hard failure.
-      if (err.cobaltUnreachable) {
-        refreshCobalt()
-        return handleQuickSave()
-      }
       setErrorMsg(describeError(err))
       setStage('error')
     }
@@ -259,7 +247,9 @@ function UrlMode({ onBack, addRecipe, navigate }) {
               : 'bg-primary-50 dark:bg-primary/20 text-primary'
           }`}>
             {isVideo
-              ? (willQueue ? '🎬 Video detected — will save to queue' : '🎬 Video detected — will transcribe audio')
+              ? (cobaltReachable
+                  ? '🎬 Video — extracts in the background, add as many as you like'
+                  : '🎬 Video — queued until the home server is reachable')
               : '🌐 Web page — will extract recipe text'}
           </div>
         )}
@@ -289,7 +279,7 @@ function UrlMode({ onBack, addRecipe, navigate }) {
                 ? 'Turn on AI in admin settings to use recipe extraction. Tap the Plated logo 5 times to open admin settings.'
                 : isVideo
                   ? willQueue
-                    ? 'Saving to the queue needs an Anthropic key for the caption preview. Tap the Plated logo 5 times to open admin settings.'
+                    ? 'Video extraction needs both an Anthropic key and an OpenAI key. Tap the Plated logo 5 times to open admin settings.'
                     : 'Video extraction needs both an Anthropic key and an OpenAI key. Tap the Plated logo 5 times to open admin settings.'
                   : 'Web extraction needs an Anthropic API key. Tap the Plated logo 5 times to open admin settings.'}
             </p>
@@ -302,7 +292,7 @@ function UrlMode({ onBack, addRecipe, navigate }) {
           disabled={!url.trim() || !hasKeys}
           className="w-full py-4 bg-primary text-white font-bold rounded-2xl text-sm shadow-soft active:scale-[0.98] transition-all disabled:opacity-50"
         >
-          {isVideo ? (willQueue ? <><Clock size={15} className="inline mr-1.5 -mt-0.5" />Save to Queue</> : '🎬 Extract from video') : '✨ Extract recipe'}
+          {isVideo ? <><Clock size={15} className="inline mr-1.5 -mt-0.5" />Add to queue</> : '✨ Extract recipe'}
         </button>
 
         {/* How it works */}

@@ -63,6 +63,27 @@ export function useVideoQueue() {
     onSuccess: () => qc.invalidateQueries({ queryKey: QUERY_KEY }),
   })
 
+  /**
+   * Marks an item as processing, but only if nobody else already did.
+   * Jacob and Madi can have the app open at once, and both would otherwise
+   * start extracting the same video — two Whisper charges for one recipe. The
+   * status filter makes the claim atomic: the update matches zero rows for
+   * whoever comes second, and `false` tells that caller to skip the item.
+   */
+  const claimMutation = useMutation({
+    mutationFn: async (id) => {
+      const { data, error } = await supabase
+        .from('video_queue')
+        .update({ status: 'processing', updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .in('status', ['queued', 'partial'])
+        .select()
+      if (error) throw error
+      return (data || []).length > 0
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: QUERY_KEY }),
+  })
+
   const removeMutation = useMutation({
     mutationFn: async (id) => {
       const { error } = await supabase.from('video_queue').delete().eq('id', id)
@@ -77,7 +98,9 @@ export function useVideoQueue() {
     items,
     pendingCount: items.filter((i) => i.status === 'queued' || i.status === 'partial').length,
     isLoading: query.isLoading,
+    processingItem: items.find((i) => i.status === 'processing') || null,
     addToQueue: (fields) => addMutation.mutateAsync(fields),
+    claimQueueItem: (id) => claimMutation.mutateAsync(id),
     updateQueueItem: (id, fields) => updateMutation.mutateAsync({ id, fields }),
     removeFromQueue: (id) => removeMutation.mutateAsync(id),
   }

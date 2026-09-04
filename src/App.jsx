@@ -7,6 +7,7 @@ import { useAuth } from './hooks/useAuth'
 import { useAppStore } from './stores/useAppStore'
 import AppShell from './components/layout/AppShell'
 import ErrorBoundary from './components/ErrorBoundary'
+import QueueProcessor from './hooks/useQueueProcessor'
 import Home from './pages/Home'
 import Auth from './pages/Auth'
 import LoadingScreen from './components/ui/LoadingScreen'
@@ -36,7 +37,11 @@ function AppRoutes() {
   if (!user) return <Auth />
 
   return (
-    <Suspense fallback={<LoadingScreen />}>
+    <>
+      {/* Outside Suspense and Routes so background extraction keeps running
+          across navigation instead of restarting whenever the route changes. */}
+      <QueueProcessor />
+      <Suspense fallback={<LoadingScreen />}>
       <Routes>
         {/* Full-screen — no bottom nav */}
         <Route path="/recipe/:id/cook" element={<CookingMode />} />
@@ -57,7 +62,8 @@ function AppRoutes() {
         <Route path="/profile" element={<AppShell><Profile /></AppShell>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-    </Suspense>
+      </Suspense>
+    </>
   )
 }
 
