@@ -12,7 +12,7 @@ import toast from 'react-hot-toast'
 import {
   ChefHat, Flame, Star, ShoppingCart,
   LogOut, Check, ShoppingBag, Sun, Moon,
-  Copy, UserPlus, Link2, Link2Off, RotateCcw, X, Pencil, BookHeart,
+  Copy, UserPlus, Link2, Link2Off, RotateCcw, X, Pencil, BookHeart, Share2,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import ThumbnailPicker from '../components/ui/ThumbnailPicker'
@@ -92,6 +92,9 @@ export default function Profile() {
               <StatBlock icon={<Flame size={16} />} value={streak} label="Streak" />
             </div>
           </div>
+
+          {/* Share-sheet link for the iOS shortcut */}
+          {isSupabaseConfigured && profile?.share_token && <ShareShortcutCard token={profile.share_token} />}
 
           {/* Partner sync */}
           {isSupabaseConfigured && (
@@ -652,6 +655,68 @@ function DayPatternsCard({ entries, recipes }) {
             </Link>
           )
         })}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * The endpoint the iOS shortcut posts to. Personal to each account, so Jacob
+ * and Madi each copy their own — the token in the URL is what identifies who
+ * shared the video, since a Shortcut can't sign in.
+ */
+function ShareShortcutCard({ token }) {
+  const [revealed, setRevealed] = useState(false)
+  const host = typeof window !== 'undefined' ? window.location.host : ''
+  const shareUrl = `https://${host}/api/share/${token}`
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl)
+      toast.success('Link copied')
+    } catch {
+      setRevealed(true)
+      toast.error('Copy failed — select it manually')
+    }
+  }
+
+  return (
+    <div className="bg-white dark:bg-stone-800 rounded-2xl shadow-card p-5">
+      <div className="flex items-center gap-3 mb-3">
+        <div className="w-10 h-10 bg-primary-50 dark:bg-primary-900/20 rounded-xl flex items-center justify-center">
+          <Share2 size={18} className="text-primary" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-gray-900 dark:text-stone-50 text-sm">Save from TikTok</p>
+          <p className="text-warm-400 dark:text-stone-500 text-xs">Your personal share link</p>
+        </div>
+      </div>
+
+      <p className="text-warm-400 dark:text-stone-400 text-xs leading-relaxed mb-3">
+        Used once when setting up the “Save to Plated” shortcut. Keep it private — anyone with
+        it can add videos to your queue.
+      </p>
+
+      {revealed && (
+        <p className="font-mono text-[10px] text-warm-500 dark:text-stone-400 break-all bg-cream dark:bg-stone-900 rounded-xl p-3 mb-3 select-all">
+          {shareUrl}
+        </p>
+      )}
+
+      <div className="flex gap-2">
+        <button
+          onClick={copy}
+          className="flex-1 flex items-center justify-center gap-2 py-3 bg-primary text-white rounded-2xl font-semibold text-xs active:scale-95 transition-all"
+        >
+          <Copy size={14} />
+          Copy share link
+        </button>
+        <button
+          onClick={() => setRevealed((v) => !v)}
+          className="px-4 py-3 bg-warm-100 dark:bg-stone-700 text-gray-700 dark:text-stone-200 rounded-2xl font-semibold text-xs active:scale-95 transition-all"
+        >
+          {revealed ? 'Hide' : 'Show'}
+        </button>
       </div>
     </div>
   )
