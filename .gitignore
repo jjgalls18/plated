@@ -27,3 +27,7 @@ cobalt cloudflare token
 *.njsproj
 *.sln
 *.sw?
+.vercel
+
+# Applied directly in the Supabase SQL editor; kept locally as a record.
+supabase/keepalive.sql
