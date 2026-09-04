@@ -5,7 +5,7 @@ import { useVideoQueue } from '../hooks/useVideoQueue'
 import { useCobaltStatus } from '../hooks/useCobaltStatus'
 import { useAppStore } from '../stores/useAppStore'
 import { useAddRecipe, useRecipes } from '../hooks/useRecipes'
-import { transcribeVideoAudio, extractRecipeFromText, mergeQueuedRecipe, errorText } from '../lib/extraction'
+import { transcribeVideoAudio, buildVideoSource, extractRecipeFromText, mergeQueuedRecipe, errorText } from '../lib/extraction'
 import toast from 'react-hot-toast'
 
 const STATUS_META = {
@@ -38,9 +38,12 @@ export default function Queue() {
     try {
       const transcript = await transcribeVideoAudio(item.url, { openaiApiKey, onStep: () => {} })
 
+      // No caption-derived partial means caption pre-processing found nothing,
+      // so fall back to the same caption+transcript combination the instant
+      // path uses — a silent video still has its caption to work from.
       const recipe = item.partial_recipe
         ? await mergeQueuedRecipe({ partialRecipe: item.partial_recipe, transcript, sourceUrl: item.url, anthropicApiKey, logAiCost })
-        : await extractRecipeFromText(transcript, anthropicApiKey, item.url, savedRecipes, { model: 'claude-sonnet-5', feature: 'video_extraction', logAiCost })
+        : await extractRecipeFromText(await buildVideoSource(item.url, transcript), anthropicApiKey, item.url, savedRecipes, { model: 'claude-sonnet-5', feature: 'video_extraction', logAiCost })
 
       const saved = await addRecipe.mutateAsync({
         title: recipe.title,

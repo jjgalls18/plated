@@ -142,18 +142,56 @@ export async function transcribeVideoAudio(url, { openaiApiKey, onStep }) {
  * Extract recipe from a video URL (TikTok, Instagram, YouTube)
  * Uses Whisper for transcription + Claude for extraction
  */
+export async function fetchCaption(url) {
+  const res = await fetch('/api/fetch-page', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
+    body: JSON.stringify({ url }),
+  })
+  if (!res.ok) return null
+  const { caption } = await res.json()
+  return caption?.trim() || null
+}
+
+/**
+ * Combines what the poster wrote with what they said.
+ *
+ * Plenty of cooking videos are silent — music over B-roll, with the whole
+ * recipe in the caption — so a transcript-only extraction has nothing to work
+ * with there. The caption fetch is best-effort: it must never sink an
+ * extraction the transcript could have carried on its own.
+ */
+export async function buildVideoSource(url, transcript) {
+  const caption = await fetchCaption(url).catch(() => null)
+
+  const spoken = transcript?.trim()
+  const written = caption?.trim()
+
+  if (!spoken && !written) {
+    throw new Error('This video has no speech and no caption text, so there was nothing to read a recipe from')
+  }
+
+  return [
+    written ? `CAPTION (written by the poster):\n${written}` : null,
+    spoken
+      ? `TRANSCRIPT (spoken audio):\n${spoken}`
+      : 'TRANSCRIPT: this video has no spoken audio — the caption is the only source.',
+  ].filter(Boolean).join('\n\n')
+}
+
 export async function extractFromVideo(url, { anthropicApiKey, openaiApiKey, onStep, savedRecipes = [], logAiCost }) {
   if (!anthropicApiKey || !openaiApiKey) {
     throw new Error('API keys required — add them in the admin panel (tap logo 5 times)')
   }
 
   const transcript = await transcribeVideoAudio(url, { openaiApiKey, onStep })
+  const source = await buildVideoSource(url, transcript)
 
   onStep?.('Extracting recipe with Claude…')
 
   // TikTok/Instagram/YouTube extraction uses Sonnet 5 — transcripts are messier
   // than clean web-page text and benefit from the stronger model.
-  const recipe = await extractRecipeFromText(transcript, anthropicApiKey, url, savedRecipes, {
+  const recipe = await extractRecipeFromText(source, anthropicApiKey, url, savedRecipes, {
     model: 'claude-sonnet-5',
     feature: 'video_extraction',
     logAiCost,
