@@ -35,7 +35,18 @@ function isSupportedVideo(url) {
 }
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
+  // GET is allowed so the iOS Shortcut can be a single action with nothing to
+  // configure: "Get Contents of URL" defaults to GET, so the whole shortcut
+  // becomes one field — the share link with ?url= and the shared value appended.
+  // Building the JSON-body version by hand is the fiddly part, and Apple blocks
+  // importing an unsigned prebuilt shortcut, so the build can't be skipped —
+  // only shortened.
+  //
+  // A GET that changes state isn't textbook. It's defensible here: the endpoint
+  // de-duplicates, so a repeat is a no-op rather than a second transcription;
+  // the token never appears in a page, so nothing crawls or prefetches it; and
+  // POST with a JSON body still works for anyone who prefers it.
+  if (req.method !== 'POST' && req.method !== 'GET') {
     return res.status(405).json({ ok: false, error: 'Method not allowed' })
   }
 
