@@ -5,18 +5,25 @@ import { useVideoQueue } from '../../hooks/useVideoQueue'
 import { useQueueProgress } from '../../stores/useQueueProgress'
 
 /**
- * Ambient status for background extraction. Extraction now runs while you're
- * anywhere in the app, so there has to be somewhere other than the queue page
- * that shows it's happening — otherwise adding a link looks like it did
- * nothing until a recipe silently appears.
+ * Ambient status for background extraction. Extraction runs on the home server
+ * whether or not the app is open, so there has to be somewhere other than the
+ * queue page that shows it's happening — otherwise adding a link looks like it
+ * did nothing until a recipe silently appears.
  */
 export default function QueueBanner() {
   const location = useLocation()
   const { reachable } = useCobaltStatus()
   const { items, pendingCount } = useVideoQueue()
-  const { step } = useQueueProgress()
+  const { activeId, step: localStep } = useQueueProgress()
 
-  const processing = items.some((i) => i.status === 'processing')
+  const processingItem = items.find((i) => i.status === 'processing')
+  const processing = !!processingItem
+  // The worker publishes its step to the row; a manual run on this device
+  // reports through local state. Either way the banner says the same thing.
+  const step = (processingItem && activeId === processingItem.id)
+    ? localStep
+    : (processingItem?.progress_step || '')
+
   if (location.pathname === '/queue') return null
   if (!processing && (!reachable || pendingCount === 0)) return null
 

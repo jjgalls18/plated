@@ -74,7 +74,7 @@ function UrlMode({ onBack, addRecipe, navigate }) {
   const { anthropicApiKey, openaiApiKey, aiEnabled, logAiCost } = useAppStore()
   const { data: savedRecipes = [] } = useRecipes()
   const { reachable: cobaltReachable, reason: cobaltReason, version: cobaltVersion, checking: checkingCobalt, refresh: refreshCobalt } = useCobaltStatus()
-  const { addToQueue, updateQueueItem } = useVideoQueue()
+  const { addToQueue, attachPartialRecipe } = useVideoQueue()
   const [url, setUrl] = useState('')
   const [stage, setStage] = useState('input') // input | processing | queuing | review | error
   const [stepLabel, setStepLabel] = useState('')
@@ -94,14 +94,16 @@ function UrlMode({ onBack, addRecipe, navigate }) {
     setStage('queuing')
     try {
       const queued = await addToQueue({ url, status: 'queued' })
-      toast.success(cobaltReachable ? 'Added — extracting in the background' : 'Saved to queue!')
+      // Worth saying out loud: the home server does this now, so there is no
+      // reason to sit and watch it.
+      toast.success(cobaltReachable ? 'Added — extracting on the home server, you can close Plated' : 'Saved to queue!')
       setUrl('')
       setStage('input')
       // Pre-process from the caption in the background — don't block the
       // "saved" confirmation on this, it's a nice-to-have, not required.
       extractCaptionPartial(url, { anthropicApiKey, savedRecipes, logAiCost })
         .then((partial) => {
-          if (partial) updateQueueItem(queued.id, { status: 'partial', caption_text: partial.description || null, partial_recipe: partial })
+          if (partial) attachPartialRecipe(queued.id, partial)
         })
         .catch(() => {})
       // Deliberately stays on this screen rather than navigating to the queue —

@@ -7,7 +7,6 @@ import { useAuth } from './hooks/useAuth'
 import { useAppStore } from './stores/useAppStore'
 import AppShell from './components/layout/AppShell'
 import ErrorBoundary from './components/ErrorBoundary'
-import QueueProcessor from './hooks/useQueueProcessor'
 import Home from './pages/Home'
 import Auth from './pages/Auth'
 import LoadingScreen from './components/ui/LoadingScreen'
@@ -38,9 +37,6 @@ function AppRoutes() {
 
   return (
     <>
-      {/* Outside Suspense and Routes so background extraction keeps running
-          across navigation instead of restarting whenever the route changes. */}
-      <QueueProcessor />
       <Suspense fallback={<LoadingScreen />}>
       <Routes>
         {/* Full-screen — no bottom nav */}

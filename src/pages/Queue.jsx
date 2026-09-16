@@ -1,7 +1,8 @@
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Clock, RefreshCw, Trash2, Play, ChefHat, AlertTriangle, CheckCircle2 } from 'lucide-react'
+import { ArrowLeft, Clock, RefreshCw, Trash2, Play, ChefHat, AlertTriangle, CheckCircle2, Smartphone } from 'lucide-react'
 import { useVideoQueue } from '../hooks/useVideoQueue'
 import { useCobaltStatus } from '../hooks/useCobaltStatus'
+import { useManualExtraction } from '../hooks/useManualExtraction'
 import { useQueueProgress } from '../stores/useQueueProgress'
 import toast from 'react-hot-toast'
 
@@ -17,20 +18,20 @@ export default function Queue() {
   const navigate = useNavigate()
   const { items, updateQueueItem, removeFromQueue } = useVideoQueue()
   const { reachable, checking, refresh } = useCobaltStatus()
-  const { activeId, step, resetAttempts } = useQueueProgress()
+  const { extractNow, running, hasKeys } = useManualExtraction()
+  const { activeId, step: localStep } = useQueueProgress()
 
   const pending = items.filter((i) => i.status === 'queued' || i.status === 'partial' || i.status === 'processing')
-  const autoRunning = pending.some((i) => i.status === 'processing')
+  const anyProcessing = pending.some((i) => i.status === 'processing')
   const finished = items.filter((i) => i.status === 'complete' || i.status === 'failed')
 
   /**
-   * Puts a failed video back in line. The processor caps attempts per item so a
-   * broken link can't loop, so the count has to be cleared for a retry to be
-   * picked up at all.
+   * Puts a failed video back in line. Attempts are capped per item so a broken
+   * link can't loop through Whisper credits, so the count has to be cleared for
+   * the worker to pick it up at all.
    */
   const retryItem = async (item) => {
-    resetAttempts(item.id)
-    await updateQueueItem(item.id, { status: 'queued', error_message: null })
+    await updateQueueItem(item.id, { status: 'queued', error_message: null, attempts: 0 })
     toast.success(reachable ? 'Back in the queue' : 'Queued — will run when the home server is reachable')
   }
 
@@ -42,7 +43,9 @@ export default function Queue() {
         </button>
         <div className="flex-1">
           <h1 className="font-display text-2xl font-bold text-gray-900 dark:text-stone-50">Queue</h1>
-          <p className="text-warm-400 dark:text-stone-500 text-xs mt-0.5">{autoRunning ? 'Extracting automatically — next starts when this finishes' : 'Videos waiting on the home server'}</p>
+          <p className="text-warm-400 dark:text-stone-500 text-xs mt-0.5">
+            {anyProcessing ? 'Extracting now — you can close the app' : 'The home server extracts these on its own'}
+          </p>
         </div>
         <button
           onClick={() => refresh()}
@@ -64,7 +67,7 @@ export default function Queue() {
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <Clock size={32} className="text-warm-300 dark:text-stone-600 mb-3" />
             <p className="font-semibold text-gray-700 dark:text-stone-300 mb-1">Nothing queued</p>
-            <p className="text-sm text-warm-400 dark:text-stone-500">Paste a video link and it lands here, then extracts on its own</p>
+            <p className="text-sm text-warm-400 dark:text-stone-500">Paste a video link and it lands here, then extracts on its own — no need to keep Plated open</p>
           </div>
         )}
 
@@ -77,8 +80,11 @@ export default function Queue() {
                 reachable={reachable}
                 position={index + 1}
                 queueLength={pending.length}
-                step={activeId === item.id ? step : ''}
+                // A run started on this device reports through local state; the
+                // worker reports through the row. Prefer whichever is live.
+                step={activeId === item.id ? localStep : (item.progress_step || '')}
                 processing={item.status === 'processing'}
+                onExtractHere={hasKeys && !running ? () => extractNow(item.id) : null}
                 onRemove={() => removeFromQueue(item.id)}
               />
             ))}
@@ -100,11 +106,17 @@ export default function Queue() {
   )
 }
 
-function QueueCard({ item, reachable, processing, position, queueLength, step, onRetry, onRemove }) {
+function QueueCard({ item, reachable, processing, position, queueLength, step, onRetry, onExtractHere, onRemove }) {
   const navigate = useNavigate()
   const meta = STATUS_META[item.status] || STATUS_META.queued
   const title = item.partial_recipe?.title || item.url
   const waiting = position > 1 && !processing
+
+  // Worth distinguishing: work on the home server survives closing the app,
+  // work on this device does not.
+  const processingLabel = item.claimed_by === 'this device'
+    ? 'Extracting on this device'
+    : item.claimed_by ? 'Extracting on the home server' : meta.label
 
   return (
     <div className="bg-white dark:bg-stone-800 rounded-2xl shadow-card p-4">
@@ -117,7 +129,7 @@ function QueueCard({ item, reachable, processing, position, queueLength, step, o
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-gray-900 dark:text-stone-50 truncate">{title}</p>
           <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${meta.color}`}>
-            {waiting ? `Next up · ${position} of ${queueLength}` : meta.label}
+            {waiting ? `Next up · ${position} of ${queueLength}` : processing ? processingLabel : meta.label}
           </span>
           {processing && step && (
             <p className="flex items-center gap-1.5 text-[11px] text-violet-600 dark:text-violet-400 mt-1.5 font-medium">
@@ -150,6 +162,18 @@ function QueueCard({ item, reachable, processing, position, queueLength, step, o
         >
           <Play size={13} />
           View recipe
+        </button>
+      )}
+
+      {/* The escape hatch for the worker being down while Cobalt is up. Closing
+          the app cancels it, which is exactly why it isn't the default. */}
+      {!processing && reachable && onExtractHere && (item.status === 'queued' || item.status === 'partial') && (
+        <button
+          onClick={onExtractHere}
+          className="w-full mt-3 flex items-center justify-center gap-2 py-2.5 bg-warm-100 dark:bg-stone-700 text-gray-600 dark:text-stone-300 rounded-xl text-xs font-semibold active:scale-95 transition-all"
+        >
+          <Smartphone size={13} />
+          Extract on this device
         </button>
       )}
 
