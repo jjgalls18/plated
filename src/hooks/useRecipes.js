@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { supabase, isSupabaseConfigured } from '../lib/supabase'
+import { supabase, isSupabaseConfigured, isMissingColumnError } from '../lib/supabase'
 import { MOCK_RECIPES } from '../data/mockRecipes'
 
 // Local mock storage for demo mode
@@ -63,14 +63,6 @@ export function useRecipe(id) {
 }
 
 // --- Add recipe ---
-/**
- * PostgREST reports an unknown column as PGRST204, or as Postgres 42703 when it
- * reaches the database. Either means the schema is older than this code.
- */
-function isMissingColumnError(error) {
-  return error?.code === 'PGRST204' || error?.code === '42703' ||
-    /column .* does not exist|could not find the '.*' column/i.test(error?.message || '')
-}
 
 export function useAddRecipe() {
   const qc = useQueryClient()
