@@ -1,0 +1,30 @@
+services:
+    plated-worker:
+        build:
+            # Repo root: the image needs shared/ as well as worker/.
+            context: ..
+            dockerfile: worker/Dockerfile
+        init: true
+        restart: unless-stopped
+        container_name: plated-worker
+        env_file: .env
+        # SIGTERM lets the video in flight finish rather than abandoning a
+        # transcription that has already been paid for. Docker's default is to
+        # SIGKILL after 10s, which would cut nearly every extraction short; a
+        # restart that outlasts even this is covered by the stale-claim reaper.
+        stop_grace_period: 90s
+        networks:
+            - cobalt
+        tmpfs:
+            # Downloaded video and extracted audio land here and are unlinked
+            # immediately after. RAM-backed so a crash can't leave the disk
+            # filling up with half-processed clips.
+            - /tmp:size=512m
+
+networks:
+    cobalt:
+        # Cobalt's own network, created by ~/cobalt/docker-compose.yml. Joining
+        # it makes cobalt reachable as http://cobalt:9000 — the alternative is
+        # a round trip out through Cloudflare and back to the same machine.
+        external: true
+        name: cobalt_default

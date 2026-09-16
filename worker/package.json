@@ -1,0 +1,14 @@
+{
+  "name": "plated-worker",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Drains Plated's video_queue on the homelab so extraction doesn't need a phone with the app open",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.103.0"
+  }
+}
