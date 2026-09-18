@@ -153,7 +153,7 @@ export default function Search() {
               Coming soon — search the web for recipes and save any of them straight to your collection,
               the same way pasting a link already works today.
               {!aiEnabled || !anthropicApiKey
-                ? ' Needs an Anthropic API key and AI turned on in admin settings first.'
+                ? ' Needs to be switched on in admin settings first.'
                 : ''}
             </p>
             <button

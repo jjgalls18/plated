@@ -143,10 +143,10 @@ export async function transcribeVideoAudio(url, { onStep } = {}) {
   onStep?.('Extracting audio…')
   const audioBuffer = await extractAudio(videoBuffer)
   if (audioBuffer.length > WHISPER_MAX_BYTES) {
-    throw new Error("This video is too long to transcribe (audio exceeds Whisper's 25MB limit) — try a shorter clip")
+    throw new Error('This video is too long to transcribe (its audio exceeds the 25MB limit) — try a shorter clip')
   }
 
-  onStep?.('Transcribing with Whisper…')
+  onStep?.('Transcribing the audio…')
 
   const form = new FormData()
   form.append('file', new Blob([audioBuffer], { type: 'audio/mpeg' }), 'audio.mp3')
@@ -162,7 +162,7 @@ export async function transcribeVideoAudio(url, { onStep } = {}) {
 
   if (!whisperRes.ok) {
     const err = await whisperRes.json().catch(() => ({}))
-    throw new Error(errorText(err.error, 'Whisper transcription failed'))
+    throw new Error(errorText(err.error, 'Transcription failed'))
   }
 
   const { text } = await whisperRes.json()

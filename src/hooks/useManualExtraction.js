@@ -87,7 +87,7 @@ export function useManualExtraction() {
         await ctx.updateQueueItem(item.id, { transcript_text: transcript }).catch(() => {})
       }
 
-      step('Extracting recipe with Claude…')
+      step('Extracting the recipe…')
 
       const recipe = item.partial_recipe
         ? await mergeQueuedRecipe({

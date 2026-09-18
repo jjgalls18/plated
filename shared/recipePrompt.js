@@ -220,8 +220,8 @@ export function parseRecipeResponse(data, fallbackLabel) {
   } catch {
     const snippet = content.slice(0, 200)
     throw new Error(snippet
-      ? `Could not read the recipe from Claude's response — it replied: ${snippet}`
-      : `Claude returned an empty response (stop_reason: ${data.stop_reason || 'unknown'})`)
+      ? `Could not read a recipe from the response — it replied: ${snippet}`
+      : `Got an empty response back (stop_reason: ${data.stop_reason || 'unknown'})`)
   }
 }
 

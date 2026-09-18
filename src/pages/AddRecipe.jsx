@@ -61,13 +61,13 @@ function ModeSelect({ onSelect }) {
 
 const STEPS_VIDEO = [
   { key: 'fetch', label: 'Fetching video audio…' },
-  { key: 'transcribe', label: 'Transcribing with Whisper…' },
-  { key: 'extract', label: 'Extracting recipe with Claude…' },
+  { key: 'transcribe', label: 'Transcribing the audio…' },
+  { key: 'extract', label: 'Extracting the recipe…' },
 ]
 
 const STEPS_WEB = [
   { key: 'fetch', label: 'Fetching page…' },
-  { key: 'extract', label: 'Extracting recipe with Claude…' },
+  { key: 'extract', label: 'Extracting the recipe…' },
 ]
 
 function UrlMode({ onBack, addRecipe, navigate }) {
@@ -117,7 +117,7 @@ function UrlMode({ onBack, addRecipe, navigate }) {
   const handleExtract = async () => {
     if (!url.trim()) return
     if (!aiEnabled) {
-      toast.error('AI is turned off — enable it in admin settings (tap logo 5×)')
+      toast.error('Recipe extraction is turned off — enable it in admin settings (tap logo 5×)')
       return
     }
     // Videos queue and extract in the background. Only web pages still extract
@@ -270,20 +270,14 @@ function UrlMode({ onBack, addRecipe, navigate }) {
           </button>
         )}
 
-        {/* API key / AI-off warning */}
+        {/* Extraction-unavailable warning */}
         {url.length > 8 && !hasKeys && (
           <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40 rounded-2xl p-4">
             <p className="text-amber-800 dark:text-amber-300 text-xs font-semibold mb-1">
-              {!aiEnabled ? 'AI is turned off' : 'API keys needed'}
+              {!aiEnabled ? 'Recipe extraction is turned off' : 'Recipe extraction isn\'t set up'}
             </p>
             <p className="text-amber-700 dark:text-amber-400 text-xs leading-relaxed">
-              {!aiEnabled
-                ? 'Turn on AI in admin settings to use recipe extraction. Tap the Plated logo 5 times to open admin settings.'
-                : isVideo
-                  ? willQueue
-                    ? 'Video extraction needs both an Anthropic key and an OpenAI key. Tap the Plated logo 5 times to open admin settings.'
-                    : 'Video extraction needs both an Anthropic key and an OpenAI key. Tap the Plated logo 5 times to open admin settings.'
-                  : 'Web extraction needs an Anthropic API key. Tap the Plated logo 5 times to open admin settings.'}
+              Tap the Plated logo 5 times to open admin settings.
             </p>
           </div>
         )}
@@ -294,41 +288,9 @@ function UrlMode({ onBack, addRecipe, navigate }) {
           disabled={!url.trim() || !hasKeys}
           className="w-full py-4 bg-primary text-white font-bold rounded-2xl text-sm shadow-soft active:scale-[0.98] transition-all disabled:opacity-50"
         >
-          {isVideo ? <><Clock size={15} className="inline mr-1.5 -mt-0.5" />Add to queue</> : '✨ Extract recipe'}
+          {isVideo ? <><Clock size={15} className="inline mr-1.5 -mt-0.5" />Add to queue</> : '🍳 Extract recipe 🍳'}
         </button>
 
-        {/* How it works */}
-        <div className="bg-white dark:bg-stone-800 rounded-2xl shadow-card p-5">
-          <p className="text-xs font-semibold text-warm-400 dark:text-stone-500 uppercase tracking-wide mb-3">How it works</p>
-          {isVideo || !url ? (
-            <div className="space-y-2.5">
-              {[
-                { emoji: '🎬', text: 'Downloads the audio from your video' },
-                { emoji: '🎙️', text: 'Transcribes speech with OpenAI Whisper' },
-                { emoji: '🤖', text: 'Claude extracts ingredients & steps' },
-                { emoji: '✏️', text: 'You review and edit before saving' },
-              ].map(({ emoji, text }) => (
-                <div key={text} className="flex items-center gap-3">
-                  <span className="text-base">{emoji}</span>
-                  <p className="text-xs text-warm-400 dark:text-stone-500">{text}</p>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="space-y-2.5">
-              {[
-                { emoji: '🌐', text: 'Fetches the recipe page' },
-                { emoji: '🤖', text: 'Claude extracts ingredients & steps' },
-                { emoji: '✏️', text: 'You review and edit before saving' },
-              ].map(({ emoji, text }) => (
-                <div key={text} className="flex items-center gap-3">
-                  <span className="text-base">{emoji}</span>
-                  <p className="text-xs text-warm-400 dark:text-stone-500">{text}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
       </div>
     </div>
   )
@@ -377,7 +339,7 @@ function ConfidenceBanner({ confidence }) {
         </p>
         <p className={`text-xs leading-relaxed ${isLow ? 'text-rose-600 dark:text-rose-400' : 'text-amber-600 dark:text-amber-400'}`}>
           {isLow
-            ? 'The video may not have stated all measurements verbally. Amounts marked "(est.)" are Claude\'s best guess — double-check before cooking.'
+            ? 'The video may not have stated all measurements out loud. Amounts marked "(est.)" are a best guess — double-check before cooking.'
             : 'A few quantities were unclear and have been estimated. Items marked "(est.)" may need adjusting.'}
         </p>
       </div>
@@ -746,7 +708,7 @@ function PhotoMode({ onBack, addRecipe, navigate }) {
     const file = e.target.files?.[0]
     if (!file) return
     if (!anthropicApiKey || !aiEnabled) {
-      toast.error(aiEnabled ? 'Add your Anthropic API key first (tap logo 5× for admin)' : 'AI is turned off — enable it in admin settings (tap logo 5×)')
+      toast.error('Photo scanning isn\'t set up — open admin settings (tap logo 5×)')
       return
     }
 
@@ -791,7 +753,7 @@ If no recipe is visible, return { "error": "No recipe found" }`,
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
-        throw new Error(errorText(err.error, 'Claude API error'))
+        throw new Error(errorText(err.error, 'Could not scan the photo'))
       }
       const data = await res.json()
       logAiCost?.(computeCost(PHOTO_MODEL, data.usage), 'photo_extraction')
@@ -870,12 +832,10 @@ If no recipe is visible, return { "error": "No recipe found" }`,
         {(!anthropicApiKey || !aiEnabled) && (
           <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40 rounded-2xl p-4">
             <p className="text-amber-800 dark:text-amber-300 text-xs font-semibold mb-1">
-              {!aiEnabled ? 'AI is turned off' : 'API key needed'}
+              {!aiEnabled ? 'Photo scanning is turned off' : 'Photo scanning isn\'t set up'}
             </p>
             <p className="text-amber-700 dark:text-amber-400 text-xs">
-              {!aiEnabled
-                ? 'Turn on AI in admin settings to scan photos (tap the logo 5 times).'
-                : 'Add your Anthropic API key in admin settings (tap the logo 5 times).'}
+              Tap the Plated logo 5 times to open admin settings.
             </p>
           </div>
         )}

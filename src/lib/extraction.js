@@ -79,7 +79,7 @@ async function sendToClaude(payload) {
  */
 export async function transcribeVideoAudio(url, { openaiApiKey, onStep }) {
   if (!openaiApiKey) {
-    throw new Error('OpenAI API key required for video transcription — add it in the admin panel (tap logo 5 times)')
+    throw new Error('Video extraction isn\'t set up — finish setup in the admin panel (tap logo 5 times)')
   }
 
   onStep?.('Fetching video audio…')
@@ -94,7 +94,7 @@ export async function transcribeVideoAudio(url, { openaiApiKey, onStep }) {
     throw await apiError(transcribeRes, 'Failed to transcribe video')
   }
 
-  onStep?.('Transcribing with Whisper…')
+  onStep?.('Transcribing the audio…')
   const { transcript } = await transcribeRes.json()
   return transcript
 }
@@ -128,7 +128,7 @@ export async function extractFromVideo(url, { anthropicApiKey, openaiApiKey, onS
   const transcript = await transcribeVideoAudio(url, { openaiApiKey, onStep })
   const source = await buildVideoSource(url, transcript)
 
-  onStep?.('Extracting recipe with Claude…')
+  onStep?.('Extracting the recipe…')
 
   // TikTok/Instagram/YouTube extraction uses Sonnet 5 — transcripts are messier
   // than clean web-page text and benefit from the stronger model.
@@ -145,7 +145,7 @@ export async function extractFromVideo(url, { anthropicApiKey, openaiApiKey, onS
  */
 export async function extractFromWeb(url, { anthropicApiKey, onStep, savedRecipes = [], logAiCost }) {
   if (!anthropicApiKey) {
-    throw new Error('Anthropic API key required — add it in the admin panel (tap logo 5 times)')
+    throw new Error('Recipe extraction isn\'t set up — finish setup in the admin panel (tap logo 5 times)')
   }
 
   onStep?.('Fetching page…')
@@ -162,7 +162,7 @@ export async function extractFromWeb(url, { anthropicApiKey, onStep, savedRecipe
 
   const { text } = await fetchRes.json()
 
-  onStep?.('Extracting recipe with Claude…')
+  onStep?.('Extracting the recipe…')
 
   return extractRecipeFromText(text, anthropicApiKey, url, savedRecipes, {
     model: 'claude-haiku-4-5-20251001',

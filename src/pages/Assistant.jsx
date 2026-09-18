@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Send, ChefHat, Sparkles } from 'lucide-react'
+import { ArrowLeft, Send, ChefHat } from 'lucide-react'
 import { useAppStore } from '../stores/useAppStore'
 import { authHeaders } from '../lib/extraction'
 import { computeCost } from '../lib/aiCost'
@@ -81,13 +81,13 @@ export default function Assistant() {
       {!ready ? (
         <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
           <div className="w-16 h-16 rounded-3xl bg-primary-50 dark:bg-primary-900/20 flex items-center justify-center mb-4">
-            <Sparkles size={28} className="text-primary" />
+            <ChefHat size={28} className="text-primary" />
           </div>
           <p className="font-semibold text-gray-700 dark:text-stone-300 mb-1">
-            {aiEnabled ? 'Add your Anthropic API key' : 'AI is turned off'}
+            The assistant isn't set up yet
           </p>
           <p className="text-sm text-warm-400 dark:text-stone-500">
-            Tap the Plated logo 5× → Controls to {aiEnabled ? 'add a key' : 'turn AI on'}, then come back.
+            Tap the Plated logo 5× → Controls to switch it on, then come back.
           </p>
         </div>
       ) : (

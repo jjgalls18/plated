@@ -654,7 +654,7 @@ export default function Home() {
           className="flex items-center gap-3 bg-white dark:bg-stone-800 rounded-2xl shadow-card p-4 active:scale-[0.98] transition-transform"
         >
           <div className="w-10 h-10 rounded-2xl bg-violet-50 dark:bg-violet-900/30 flex items-center justify-center flex-shrink-0">
-            <Sparkles size={18} className="text-violet-600 dark:text-violet-400" />
+            <ChefHat size={18} className="text-violet-600 dark:text-violet-400" />
           </div>
           <div className="flex-1">
             <p className="text-sm font-semibold text-gray-900 dark:text-stone-50">Cooking Assistant</p>

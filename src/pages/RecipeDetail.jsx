@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
   ArrowLeft, Clock, Users, Star, ChefHat, ShoppingCart,
   Minus, Plus, Trash2, Check, Share2, Play, Pencil,
-  Globe, ExternalLink, X, Heart, Repeat, Sparkles
+  Globe, ExternalLink, X, Heart, Repeat, CookingPot
 } from 'lucide-react'
 import { useRecipe, useLogMadeIt, useDeleteRecipe, useUpdateRecipe, useSimilarRecipes } from '../hooks/useRecipes'
 import { useGrocery } from '../hooks/useGrocery'
@@ -548,11 +548,11 @@ function SubstituteModal({ ingredient, recipeTitle, apiKey, aiEnabled, logAiCost
 
         {!apiKey || !aiEnabled ? (
           <p className="text-sm text-warm-400 dark:text-stone-400 mb-5">
-            {aiEnabled ? 'Add your Anthropic API key first (tap logo 5× for admin).' : 'AI is turned off — enable it in admin settings (tap logo 5×).'}
+            Substitutions aren't set up — open admin settings (tap logo 5×).
           </p>
         ) : loading ? (
           <div className="flex items-center gap-2 py-4 mb-5">
-            <Sparkles size={14} className="text-primary animate-pulse" />
+            <CookingPot size={14} className="text-primary animate-pulse" />
             <p className="text-sm text-warm-400 dark:text-stone-500">Thinking…</p>
           </div>
         ) : (

@@ -33,7 +33,7 @@ export async function runItem(item) {
       await store.saveTranscript(claimed.id, transcript)
     }
 
-    await step('Extracting recipe with Claude…')
+    await step('Extracting the recipe…')
 
     let recipe
     let cost
