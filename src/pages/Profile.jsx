@@ -4,14 +4,13 @@ import { useAuth } from '../hooks/useAuth'
 import { useAppStore, calculateStreak } from '../stores/useAppStore'
 import { useRecipes } from '../hooks/useRecipes'
 import { usePartner } from '../hooks/usePartner'
-import { useGrocery } from '../hooks/useGrocery'
 import { useCookLog } from '../hooks/useCookLog'
 import { useCoupleStory } from '../hooks/useCoupleStory'
 import { isSupabaseConfigured } from '../lib/supabase'
 import toast from 'react-hot-toast'
 import {
-  ChefHat, Flame, Star, ShoppingCart,
-  LogOut, Check, ShoppingBag, Sun, Moon,
+  ChefHat, Flame, Star,
+  LogOut, Sun, Moon,
   Copy, UserPlus, Link2, Link2Off, RotateCcw, X, Pencil, BookHeart, Share2,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
@@ -21,7 +20,6 @@ export default function Profile() {
   const { signOut, profile, updateProfile } = useAuth()
   const { data: recipes = [] } = useRecipes()
   const { cookedDates, darkMode, setDarkMode } = useAppStore()
-  const { items: groceryItems, toggleItem, clearChecked } = useGrocery()
   const { inviteCode, partner, joinWithCode, unlinkPartner } = usePartner()
   const { entries, myId, partnerId } = useCookLog()
   const [activeTab, setActiveTab] = useState('overview')
@@ -32,7 +30,6 @@ export default function Profile() {
 
   const totalCooked = recipes.reduce((sum, r) => sum + (r.made_count || 0), 0)
   const avgRating = recipes.filter((r) => r.rating).reduce((sum, r, _, arr) => sum + r.rating / arr.length, 0)
-  const checkedCount = groceryItems.filter((i) => i.checked).length
 
   const streak = calculateStreak(cookedDates)
 
@@ -56,7 +53,6 @@ export default function Profile() {
           {[
             { id: 'overview', label: 'Overview' },
             { id: 'story', label: 'Our Story' },
-            { id: 'grocery', label: `Grocery${groceryItems.length > 0 ? ` (${groceryItems.length})` : ''}` },
             { id: 'settings', label: 'Settings' },
           ].map(({ id, label }) => (
             <button
@@ -213,58 +209,6 @@ export default function Profile() {
       )}
 
       {activeTab === 'story' && <StoryTab />}
-
-      {activeTab === 'grocery' && (
-        <div className="px-5 space-y-4">
-          <div className="bg-white dark:bg-stone-800 rounded-2xl shadow-card p-5">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <ShoppingBag size={18} className="text-primary" />
-                <h3 className="font-semibold text-gray-900 dark:text-stone-50">Grocery List</h3>
-              </div>
-              {checkedCount > 0 && (
-                <button
-                  onClick={clearChecked}
-                  className="text-xs text-warm-400 dark:text-stone-500 font-semibold"
-                >
-                  Clear {checkedCount} checked
-                </button>
-              )}
-            </div>
-
-            {groceryItems.length === 0 ? (
-              <div className="text-center py-8">
-                <ShoppingCart size={36} className="text-warm-300 dark:text-stone-600 mx-auto mb-3" />
-                <p className="text-warm-400 dark:text-stone-500 text-sm">
-                  Add ingredients from any recipe using the "Grocery List" button on the recipe page.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {groceryItems.map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => toggleItem(item.id, item.checked)}
-                    className="w-full flex items-center gap-3 py-2.5 text-left"
-                  >
-                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
-                      item.checked ? 'bg-sage border-sage' : 'border-warm-300 dark:border-stone-600'
-                    }`}>
-                      {item.checked && <Check size={11} className="text-white" />}
-                    </div>
-                    <div className="flex-1">
-                      <span className={`text-sm font-medium transition-colors ${item.checked ? 'text-warm-400 dark:text-stone-600 line-through' : 'text-gray-900 dark:text-stone-100'}`}>
-                        {item.amount && <span className="text-warm-400 dark:text-stone-500 mr-1.5">{item.amount}</span>}
-                        {item.name}
-                      </span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       {activeTab === 'settings' && (
         <div className="px-5 space-y-4">

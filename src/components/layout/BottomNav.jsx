@@ -3,7 +3,7 @@ import { Home, BookOpen, Plus, CalendarDays, User } from 'lucide-react'
 
 const navItems = [
   { to: '/', icon: Home, label: 'Home' },
-  { to: '/recipes', icon: BookOpen, label: 'Recipes' },
+  { to: '/recipes', icon: BookOpen, label: 'Recipes', also: ['/grocery'] },
   { to: '/add', icon: Plus, label: 'Add', isPrimary: true },
   { to: '/meal-plan', icon: CalendarDays, label: 'Plan' },
   { to: '/profile', icon: User, label: 'Us' },
@@ -15,10 +15,12 @@ export default function BottomNav() {
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 glass shadow-nav h-nav">
       <div className="flex items-center justify-around h-[4.5rem] max-w-lg mx-auto px-2">
-        {navItems.map(({ to, icon: Icon, label, isPrimary }) => {
+        {navItems.map(({ to, icon: Icon, label, isPrimary, also = [] }) => {
+          // Grocery lives under Recipes now, so it lights up the Recipes tab
+          // rather than leaving the bar with nothing selected.
           const isActive = to === '/'
             ? location.pathname === '/'
-            : location.pathname.startsWith(to)
+            : [to, ...also].some((p) => location.pathname.startsWith(p))
 
           if (isPrimary) {
             return (

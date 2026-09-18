@@ -8,6 +8,7 @@ import { isSupabaseConfigured } from '../lib/supabase'
 import { groupByCategory, getCategoryEmoji } from '../lib/grocery'
 import { buildTodoIcs, shareIcsFile } from '../lib/ics'
 import PageHeader from '../components/ui/PageHeader'
+import SectionTabs from '../components/ui/SectionTabs'
 import toast from 'react-hot-toast'
 
 export default function Grocery() {
@@ -79,6 +80,11 @@ export default function Grocery() {
       <PageHeader />
 
       <div className="px-5 pb-nav">
+        {/* Section tabs — shared with /recipes */}
+        <div className="mb-5">
+          <SectionTabs />
+        </div>
+
         {/* Title row */}
         <div className="flex items-center justify-between mb-5">
           <div>

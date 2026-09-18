@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Search as SearchIcon, X, Plus, Shuffle, BookHeart } from 'lucide-react'
 import { useRecipes } from '../hooks/useRecipes'
 import RecipeCard, { RecipeCardHero, RecipeCardSkeleton } from '../components/ui/RecipeCard'
 import PageHeader from '../components/ui/PageHeader'
+import SectionTabs from '../components/ui/SectionTabs'
 
 const FILTER_TAGS = [
   'italian', 'asian', 'healthy', 'quick', 'dessert',
@@ -23,11 +24,18 @@ export default function Recipes() {
   const [searchParams] = useSearchParams()
   const [query, setQuery] = useState('')
   const [activeTag, setActiveTag] = useState(() => tagFromFilter(searchParams.get('filter')))
-  const [view, setView] = useState('all') // 'all' | 'cookbook'
+
+  // Which view is showing comes from the URL, not local state, so the section
+  // tabs can select it from the Grocery page too.
+  const view = searchParams.get('view') === 'cookbook' ? 'cookbook' : 'all'
 
   // "Our Cookbook" has no search box of its own — don't let a query typed
   // in "All Recipes" silently carry over and narrow the favorites list.
   const { data: recipes = [], isLoading } = useRecipes(view === 'cookbook' ? '' : query)
+
+  useEffect(() => {
+    if (view === 'cookbook') setQuery('')
+  }, [view])
 
   const favorites = recipes.filter((r) => r.is_favorite)
   const displayed = view === 'cookbook'
@@ -35,11 +43,6 @@ export default function Recipes() {
     : activeTag
       ? recipes.filter((r) => r.tags?.includes(activeTag))
       : recipes
-
-  const handleViewChange = (next) => {
-    setView(next)
-    if (next === 'cookbook') setQuery('')
-  }
 
   const handleSurprise = () => {
     if (!recipes.length) return
@@ -103,21 +106,9 @@ export default function Recipes() {
         )}
       </div>
 
-      {/* All / Our Cookbook */}
+      {/* All Recipes / Grocery / Our Cookbook */}
       <div className="px-5 mb-5">
-        <div className="flex bg-white dark:bg-stone-800 rounded-2xl shadow-card p-1">
-          {[['all', 'All Recipes'], ['cookbook', `Our Cookbook${favorites.length ? ` (${favorites.length})` : ''}`]].map(([key, label]) => (
-            <button
-              key={key}
-              onClick={() => handleViewChange(key)}
-              className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-all ${
-                view === key ? 'bg-primary text-white shadow-soft' : 'text-warm-400 dark:text-stone-500'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        <SectionTabs />
       </div>
 
       {/* Filter tags */}
