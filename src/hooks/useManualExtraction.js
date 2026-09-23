@@ -5,7 +5,7 @@ import { useRecipes, useAddRecipe } from './useRecipes'
 import { useAppStore } from '../stores/useAppStore'
 import { useQueueProgress } from '../stores/useQueueProgress'
 import { useErrorLog } from '../stores/useErrorLog'
-import { REVIEW_THRESHOLD } from '../../shared/recipePrompt.js'
+import { combineCaptionAndTranscript, REVIEW_THRESHOLD } from '../../shared/recipePrompt.js'
 
 /**
  * Extracts one queued video in this browser tab, on demand.
@@ -70,7 +70,7 @@ export function useManualExtraction() {
 
       // Loaded on demand so the extraction code stays out of the initial
       // bundle — most sessions never press this button.
-      const { transcribeVideoAudio, buildVideoSource, extractRecipeFromText, mergeQueuedRecipe } =
+      const { transcribeVideoAudio, fetchPageInfo, rehostImage, extractRecipeFromText, mergeQueuedRecipe } =
         await import('../lib/extraction')
 
       // Whisper is the paid, slow part; when a later step fails there is no
@@ -87,6 +87,11 @@ export function useManualExtraction() {
         await ctx.updateQueueItem(item.id, { transcript_text: transcript }).catch(() => {})
       }
 
+      const page = await fetchPageInfo(item.url)
+      // Copies while the recipe extracts — see worker/pipeline.js for why the
+      // source link can't be saved as-is.
+      const thumbnail = rehostImage(page.image)
+
       step('Extracting the recipe…')
 
       const recipe = item.partial_recipe
@@ -98,7 +103,7 @@ export function useManualExtraction() {
             logAiCost: ctx.logAiCost,
           })
         : await extractRecipeFromText(
-            await buildVideoSource(item.url, transcript),
+            combineCaptionAndTranscript(page.caption, transcript),
             ctx.anthropicApiKey,
             item.url,
             ctx.savedRecipes,
@@ -113,7 +118,7 @@ export function useManualExtraction() {
         title: recipe.title,
         description: recipe.description || '',
         source_url: item.url,
-        thumbnail_url: recipe.thumbnail_url || null,
+        thumbnail_url: await thumbnail,
         ingredients: recipe.ingredients || [],
         steps: recipe.steps || [],
         tags: recipe.tags || [],

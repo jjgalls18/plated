@@ -14,10 +14,10 @@
  * ffmpeg-static (no 80MB bundle, no chmod dance), and there is no serverless
  * 60-second ceiling to race.
  */
-import { spawn } from 'node:child_process'
-import { writeFile, readFile, unlink } from 'node:fs/promises'
-import { randomUUID } from 'node:crypto'
 import { config } from './config.js'
+import { writeFile, readFile } from 'node:fs/promises'
+import { runFfmpeg, tempPaths } from './ffmpeg.js'
+import { grabFrame } from './thumbnail.js'
 import { errorText } from '../shared/recipePrompt.js'
 
 const WHISPER_MAX_BYTES = 25 * 1024 * 1024
@@ -57,39 +57,22 @@ function localizeTunnelUrl(tunnelUrl) {
   return target.toString()
 }
 
-function runFfmpeg(inPath, outPath) {
-  return new Promise((resolve, reject) => {
-    const ff = spawn('ffmpeg', [
-      '-i', inPath,
-      '-vn',
-      '-c:a', 'libmp3lame',
-      '-b:a', '128k',
-      '-y',
-      outPath,
-    ])
-
-    let stderr = ''
-    ff.stderr.on('data', (d) => { stderr += d.toString() })
-    ff.on('error', (err) => reject(new Error(`ffmpeg failed to start: ${err.message}`)))
-    ff.on('close', (code) => {
-      if (code !== 0) return reject(new Error(`Audio extraction failed (ffmpeg exit ${code}): ${stderr.slice(-300)}`))
-      resolve()
-    })
-  })
-}
-
-async function extractAudio(videoBuffer) {
-  const id = randomUUID()
-  const inPath = `/tmp/${id}.mp4`
-  const outPath = `/tmp/${id}.mp3`
+/**
+ * Audio for Whisper plus a still frame for the recipe card, from one write of
+ * the video to disk. The frame is best-effort — it is only the fallback when
+ * the post's own cover can't be had — so its failure is a null, never a throw.
+ */
+async function splitVideo(videoBuffer) {
+  const { paths: [videoPath, audioPath], cleanup } = tempPaths('mp4', 'mp3')
 
   try {
-    await writeFile(inPath, videoBuffer)
-    await runFfmpeg(inPath, outPath)
-    return await readFile(outPath)
+    await writeFile(videoPath, videoBuffer)
+    await runFfmpeg(['-i', videoPath, '-vn', '-c:a', 'libmp3lame', '-b:a', '128k', audioPath], 'Audio extraction')
+    const audio = await readFile(audioPath)
+    const frame = await grabFrame(videoPath).catch(() => null)
+    return { audio, frame }
   } finally {
-    await unlink(inPath).catch(() => {})
-    await unlink(outPath).catch(() => {})
+    await cleanup()
   }
 }
 
@@ -131,6 +114,7 @@ async function resolveDownload(url) {
   throw new Error('Unexpected response from cobalt — try a different URL')
 }
 
+/** Returns { transcript, frame } — frame is a JPEG Buffer or null. */
 export async function transcribeVideoAudio(url, { onStep } = {}) {
   onStep?.('Fetching video audio…')
 
@@ -141,7 +125,7 @@ export async function transcribeVideoAudio(url, { onStep } = {}) {
   const videoBuffer = Buffer.from(await videoRes.arrayBuffer())
 
   onStep?.('Extracting audio…')
-  const audioBuffer = await extractAudio(videoBuffer)
+  const { audio: audioBuffer, frame } = await splitVideo(videoBuffer)
   if (audioBuffer.length > WHISPER_MAX_BYTES) {
     throw new Error('This video is too long to transcribe (its audio exceeds the 25MB limit) — try a shorter clip')
   }
@@ -166,7 +150,7 @@ export async function transcribeVideoAudio(url, { onStep } = {}) {
   }
 
   const { text } = await whisperRes.json()
-  return text
+  return { transcript: text, frame }
 }
 
 /** Cheap liveness probe, so a poll cycle can skip work the server can't do. */

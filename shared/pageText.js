@@ -27,25 +27,18 @@ export function decodeEntities(str) {
  * with. Read the blob before any stripping happens.
  */
 export function extractTikTokCaption(html) {
-  const blob = html.match(/<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__"[^>]*>([\s\S]*?)<\/script>/i)
-  if (!blob) return null
+  const item = readRehydrationItem(html)
+  if (!item) return null
 
-  try {
-    const item = JSON.parse(blob[1])?.__DEFAULT_SCOPE__?.['webapp.video-detail']?.itemInfo?.itemStruct
-    if (!item) return null
+  const parts = []
+  if (item.desc) parts.push(item.desc)
+  if (item.author?.nickname) parts.push(`Posted by ${item.author.nickname}`)
+  // A slideshow has no audio to transcribe, so say so — it tells the caller
+  // the caption is the only source there will ever be for this post.
+  const slides = item.imagePost?.images?.length
+  if (slides) parts.push(`(photo slideshow post with ${slides} images — no audio track)`)
 
-    const parts = []
-    if (item.desc) parts.push(item.desc)
-    if (item.author?.nickname) parts.push(`Posted by ${item.author.nickname}`)
-    // A slideshow has no audio to transcribe, so say so — it tells the caller
-    // the caption is the only source there will ever be for this post.
-    const slides = item.imagePost?.images?.length
-    if (slides) parts.push(`(photo slideshow post with ${slides} images — no audio track)`)
-
-    return parts.join('\n') || null
-  } catch {
-    return null
-  }
+  return parts.join('\n') || null
 }
 
 // Instagram and most recipe sites do expose a description meta tag. The tag's
@@ -59,12 +52,47 @@ export function extractMetaDescription(html) {
   return null
 }
 
+function readRehydrationItem(html) {
+  const blob = html.match(/<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__"[^>]*>([\s\S]*?)<\/script>/i)
+  if (!blob) return null
+  try {
+    return JSON.parse(blob[1])?.__DEFAULT_SCOPE__?.['webapp.video-detail']?.itemInfo?.itemStruct || null
+  } catch {
+    return null
+  }
+}
+
 /**
- * Turns raw HTML into { caption, text } — the caption alone, plus the caption
+ * The picture a page offers as its own preview: a TikTok post's cover (or a
+ * slideshow's first photo), otherwise the og:image every recipe blog sets for
+ * link previews. Relative URLs are resolved against the page.
+ *
+ * TikTok's cover links are signed and expire within days, so whatever this
+ * returns has to be copied into storage — never saved as the thumbnail itself.
+ */
+export function extractPreviewImage(html, pageUrl) {
+  const item = readRehydrationItem(html)
+  const tiktok = item?.video?.cover || item?.video?.originCover ||
+    item?.imagePost?.images?.[0]?.imageURL?.urlList?.[0]
+  if (tiktok) return tiktok
+
+  for (const name of ['og:image', 'og:image:url', 'twitter:image']) {
+    const tag = html.match(new RegExp(`<meta[^>]+(?:property|name)=["']${name}["'][^>]*>`, 'i'))?.[0]
+    const content = tag?.match(/content=["']([\s\S]*?)["']/i)?.[1]?.trim()
+    if (!content) continue
+    try {
+      return new URL(decodeEntities(content), pageUrl).toString()
+    } catch { /* malformed — try the next tag */ }
+  }
+  return null
+}
+
+/**
+ * Turns raw HTML into { caption, text, image } — the caption alone, plus the caption
  * followed by the page's visible text. Attribute- and script-borne text is
  * read first, because stripping destroys both.
  */
-export function readPageText(html, limit = 12000) {
+export function readPageText(html, limit = 12000, pageUrl) {
   const caption = extractTikTokCaption(html) || extractMetaDescription(html)
 
   const stripped = html
@@ -76,6 +104,7 @@ export function readPageText(html, limit = 12000) {
 
   return {
     caption: caption || null,
+    image: extractPreviewImage(html, pageUrl),
     text: (caption ? `${caption}\n\n${body}` : body).slice(0, limit),
   }
 }

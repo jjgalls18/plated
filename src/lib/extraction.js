@@ -99,25 +99,43 @@ export async function transcribeVideoAudio(url, { openaiApiKey, onStep }) {
   return transcript
 }
 
-export async function fetchCaption(url) {
-  const res = await fetch('/api/fetch-page', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
-    body: JSON.stringify({ url }),
-  })
-  if (!res.ok) return null
-  const { caption } = await res.json()
-  return caption?.trim() || null
+/**
+ * A post's caption and preview-image URL, each null when missing. Best-effort:
+ * it must never sink an extraction the transcript could have carried on its own.
+ */
+export async function fetchPageInfo(url) {
+  try {
+    const res = await fetch('/api/fetch-page', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
+      body: JSON.stringify({ url }),
+    })
+    if (!res.ok) return { caption: null, image: null }
+    const { caption, image } = await res.json()
+    return { caption: caption?.trim() || null, image: image || null }
+  } catch {
+    return { caption: null, image: null }
+  }
 }
 
 /**
- * Combines what the poster wrote with what they said. The caption fetch is
- * best-effort: it must never sink an extraction the transcript could have
- * carried on its own.
+ * Copies a preview image into our own storage and returns its URL, or null.
+ * Never hotlink the source — TikTok's cover links expire within days.
  */
-export async function buildVideoSource(url, transcript) {
-  const caption = await fetchCaption(url).catch(() => null)
-  return combineCaptionAndTranscript(caption, transcript)
+export async function rehostImage(imageUrl) {
+  if (!imageUrl) return null
+  try {
+    const res = await fetch('/api/rehost-image', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
+      body: JSON.stringify({ url: imageUrl }),
+    })
+    if (!res.ok) return null
+    const { url } = await res.json()
+    return url || null
+  } catch {
+    return null
+  }
 }
 
 export async function extractFromVideo(url, { anthropicApiKey, openaiApiKey, onStep, savedRecipes = [], logAiCost }) {
@@ -126,17 +144,22 @@ export async function extractFromVideo(url, { anthropicApiKey, openaiApiKey, onS
   }
 
   const transcript = await transcribeVideoAudio(url, { openaiApiKey, onStep })
-  const source = await buildVideoSource(url, transcript)
+  const page = await fetchPageInfo(url)
+  const source = combineCaptionAndTranscript(page.caption, transcript)
 
   onStep?.('Extracting the recipe…')
 
   // TikTok/Instagram/YouTube extraction uses Sonnet 5 — transcripts are messier
   // than clean web-page text and benefit from the stronger model.
-  return extractRecipeFromText(source, anthropicApiKey, url, savedRecipes, {
-    model: 'claude-sonnet-5',
-    feature: 'video_extraction',
-    logAiCost,
-  })
+  const [recipe, thumbnailUrl] = await Promise.all([
+    extractRecipeFromText(source, anthropicApiKey, url, savedRecipes, {
+      model: 'claude-sonnet-5',
+      feature: 'video_extraction',
+      logAiCost,
+    }),
+    rehostImage(page.image),
+  ])
+  return { ...recipe, thumbnail_url: thumbnailUrl }
 }
 
 /**
@@ -160,15 +183,22 @@ export async function extractFromWeb(url, { anthropicApiKey, onStep, savedRecipe
     throw await apiError(fetchRes, 'Failed to fetch page')
   }
 
-  const { text } = await fetchRes.json()
+  const { text, image } = await fetchRes.json()
 
   onStep?.('Extracting the recipe…')
 
-  return extractRecipeFromText(text, anthropicApiKey, url, savedRecipes, {
-    model: 'claude-haiku-4-5-20251001',
-    feature: 'web_extraction',
-    logAiCost,
-  })
+  // The picture copies while the recipe extracts, so it costs no extra wait.
+  // It can orphan a file if the review screen is abandoned — a few hundred KB,
+  // and cheaper than making the user wait for the copy after pressing Save.
+  const [recipe, thumbnailUrl] = await Promise.all([
+    extractRecipeFromText(text, anthropicApiKey, url, savedRecipes, {
+      model: 'claude-haiku-4-5-20251001',
+      feature: 'web_extraction',
+      logAiCost,
+    }),
+    rehostImage(image),
+  ])
+  return { ...recipe, thumbnail_url: thumbnailUrl }
 }
 
 /**

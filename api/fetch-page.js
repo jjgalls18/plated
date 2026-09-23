@@ -11,13 +11,11 @@
  */
 
 import { requireUser } from './_verifyAuth.js'
+import { refuseUrl } from './_urlGuard.js'
 import { PAGE_FETCH_HEADERS, readPageText } from '../shared/pageText.js'
 
 export const config = { maxDuration: 15 }
 
-// Blocks obvious internal/private targets so this endpoint can't be used to
-// probe the Vercel-internal network or cloud metadata services (SSRF).
-const BLOCKED_HOSTS = /^(localhost|127\.|0\.|10\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|::1$|\[::1\])/i
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -35,14 +33,9 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Missing url' })
   }
 
-  let parsed
-  try {
-    parsed = new URL(url)
-  } catch {
-    return res.status(400).json({ error: 'Invalid url' })
-  }
-  if (!['http:', 'https:'].includes(parsed.protocol) || BLOCKED_HOSTS.test(parsed.hostname)) {
-    return res.status(400).json({ error: 'URL not allowed' })
+  const refusal = refuseUrl(url)
+  if (refusal) {
+    return res.status(400).json({ error: refusal })
   }
 
   try {
@@ -52,9 +45,9 @@ export default async function handler(req, res) {
       throw new Error(`Failed to fetch page: ${pageRes.status}`)
     }
 
-    const { text, caption } = readPageText(await pageRes.text())
+    const { text, caption, image } = readPageText(await pageRes.text(), undefined, pageRes.url || url)
 
-    return res.status(200).json({ text, caption })
+    return res.status(200).json({ text, caption, image })
 
   } catch (err) {
     console.error('Fetch page error:', err)
