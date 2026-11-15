@@ -29,6 +29,12 @@ export default [
       ...react.configs['jsx-runtime'].rules,
       ...reactHooks.configs.recommended.rules,
       'react/jsx-no-target-blank': 'off',
+      // This project has no PropTypes or TypeScript, so prop-types reported
+      // 332 errors and an apostrophe in a sentence 17 more — enough noise to
+      // hide a real mistake (an undefined variable sat unnoticed among them).
+      // Off, so that `npm run lint` passing actually means something.
+      'react/prop-types': 'off',
+      'react/no-unescaped-entities': 'off',
       'react-refresh/only-export-components': [
         'warn',
         { allowConstantExport: true },
@@ -42,7 +48,7 @@ export default [
     // false positives. (shared/ is deliberately not here: it is loaded by both
     // runtimes, so linting it as browser-only is what keeps a Node built-in
     // from creeping into it.)
-    files: ['api/**/*.js', 'worker/**/*.js', '*.config.js', 'scripts/**/*.js'],
+    files: ['api/**/*.js', 'worker/**/*.js', '*.config.js', 'scripts/**/*.js', 'tests/**/*.js'],
     languageOptions: {
       globals: { ...globals.node, ...globals.browser },
     },

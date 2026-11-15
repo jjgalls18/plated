@@ -2,16 +2,18 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
   ArrowLeft, Clock, Users, Star, ChefHat, ShoppingCart,
-  Minus, Plus, Trash2, Check, Share2, Play, Pencil,
-  Globe, ExternalLink, X, Heart, Repeat, CookingPot
+  Minus, Plus, Trash2, Share2, Play, Pencil,
+  Globe, X, Heart, Repeat, CookingPot
 } from 'lucide-react'
 import { useRecipe, useLogMadeIt, useDeleteRecipe, useUpdateRecipe, useSimilarRecipes } from '../hooks/useRecipes'
 import { useGrocery } from '../hooks/useGrocery'
 import { useAppStore } from '../stores/useAppStore'
 import { useAuth } from '../hooks/useAuth'
+import { usePartner } from '../hooks/usePartner'
 import ThumbnailPicker from '../components/ui/ThumbnailPicker'
 import { authHeaders } from '../lib/extraction'
 import { computeCost } from '../lib/aiCost'
+import { scaleAmount as scaleIngredientAmount } from '../lib/cooking'
 import toast from 'react-hot-toast'
 
 const SUBSTITUTE_MODEL = 'claude-haiku-4-5-20251001'
@@ -61,6 +63,8 @@ export default function RecipeDetail() {
   const { logCook, incrementGroceryListsGenerated, anthropicApiKey, aiEnabled, logAiCost } = useAppStore()
   const [substituteFor, setSubstituteFor] = useState(null)
   const { profile } = useAuth()
+  const { partner } = usePartner()
+  const myKey = profile?.display_name?.toLowerCase() === 'madi' ? 'madi' : 'jacob'
   const { addItems } = useGrocery()
 
   const similarRecipes = useSimilarRecipes(recipe)
@@ -84,7 +88,9 @@ export default function RecipeDetail() {
 
   const handleMadeItSave = async ({ rating, notes, person, photoUrl }) => {
     try {
-      await logMadeIt.mutateAsync({ recipeId: recipe.id, rating, notes, photoUrl })
+      // The modal's "who cooked?" choice decides whose tally this lands on.
+      const userId = person === myKey ? profile?.id : partner?.id
+      await logMadeIt.mutateAsync({ recipeId: recipe.id, rating, notes, photoUrl, userId })
       logCook({ person, recipeId: recipe.id, recipeTitle: recipe.title, recipeThumbnail: photoUrl || recipe.thumbnail_url })
       setShowMadeItModal(false)
       toast.success('Logged! Great cooking 🎉')
@@ -129,25 +135,8 @@ export default function RecipeDetail() {
     }
   }
 
-  const scaleAmount = (amount) => {
-    if (!amount || servingScale === 1) return amount
-    // Match a leading quantity — plain number, fraction ("1/2"), or range ("1-2") —
-    // and scale just that part, preserving whatever unit/text follows (e.g. "cups").
-    const match = amount.match(/^(\d+\.?\d*)(?:\/(\d+\.?\d*))?(?:\s*-\s*(\d+\.?\d*)(?:\/(\d+\.?\d*))?)?/)
-    if (!match || !match[0]) return amount
-
-    const [full, n1, d1, n2, d2] = match
-    const rest = amount.slice(full.length)
-    const format = (n) => {
-      const rounded = Math.round(n * 100) / 100
-      return rounded % 1 === 0 ? rounded.toString() : String(rounded)
-    }
-    const val1 = format((d1 ? parseFloat(n1) / parseFloat(d1) : parseFloat(n1)) * servingScale)
-    if (!n2) return `${val1}${rest}`
-
-    const val2 = format((d2 ? parseFloat(n2) / parseFloat(d2) : parseFloat(n2)) * servingScale)
-    return `${val1}-${val2}${rest}`
-  }
+  const scaleAmount = (amount) => scaleIngredientAmount(amount, servingScale)
+  const cookPath = `/recipe/${id}/cook${servingScale !== 1 ? `?scale=${servingScale}` : ''}`
 
   const hasSteps = recipe.steps?.length > 0
 
@@ -311,7 +300,7 @@ export default function RecipeDetail() {
 
           {hasSteps && (
             <button
-              onClick={() => navigate(`/recipe/${id}/cook`)}
+              onClick={() => navigate(cookPath)}
               className="w-full mt-3 py-3 bg-sage text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 active:scale-95 transition-all shadow-soft"
             >
               <Play size={15} fill="white" />
@@ -381,7 +370,7 @@ export default function RecipeDetail() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-display font-semibold text-lg text-gray-900 dark:text-stone-50">Instructions</h2>
               <button
-                onClick={() => navigate(`/recipe/${id}/cook`)}
+                onClick={() => navigate(cookPath)}
                 className="text-xs text-sage font-semibold flex items-center gap-1"
               >
                 <Play size={11} fill="currentColor" />
@@ -447,7 +436,7 @@ export default function RecipeDetail() {
           onClose={() => setShowMadeItModal(false)}
           onSave={handleMadeItSave}
           saving={logMadeIt.isPending}
-          currentUser={profile?.display_name?.toLowerCase() === 'madi' ? 'madi' : 'jacob'}
+          currentUser={myKey}
         />
       )}
 

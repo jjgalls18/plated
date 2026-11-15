@@ -28,7 +28,7 @@ function readCache() {
 function writeCache(entry) {
   try {
     localStorage.setItem(CACHE_KEY, JSON.stringify(entry))
-  } catch {}
+  } catch { /* storage full or blocked — the forecast just isn't cached */ }
 }
 
 function isStale(entry) {

@@ -26,7 +26,7 @@ export default function ThumbnailPicker({ url, onChange, compact = false }) {
     try {
       const publicUrl = await uploadRecipeImage(file, user?.id || 'anon')
       onChange(publicUrl)
-    } catch (err) {
+    } catch {
       toast.error('Upload failed — check storage bucket is set up')
     } finally {
       setUploading(false)

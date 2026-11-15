@@ -12,6 +12,7 @@ import { useAuth } from '../hooks/useAuth'
 import { usePartner } from '../hooks/usePartner'
 import { useCookLog } from '../hooks/useCookLog'
 import { useMealPlan } from '../hooks/useMealPlan'
+import { addDays, localDateStr } from '../lib/dates'
 import PageHeader from '../components/ui/PageHeader'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -464,7 +465,7 @@ function DiscoverySection({ recipes, navigate, entries }) {
 
   // Recipes cooked in the last 7 days, ranked by how often — used by "Trending This Week"
   const trendCounts = useMemo(() => {
-    const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0]
+    const weekAgo = addDays(localDateStr(), -7)
     const counts = {}
     entries.forEach((e) => {
       if (e.date >= weekAgo) counts[e.recipeId] = (counts[e.recipeId] || 0) + 1
@@ -585,7 +586,7 @@ export default function Home() {
   const partnerCooks = entries.filter((e) => e.userId === partnerId).length
   const lastEntry    = entries[0] ?? null
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = localDateStr()
   const tonightRecipeId = mealPlan[today]?.dinner
   const tonightRecipe = tonightRecipeId ? recipes.find((r) => r.id === tonightRecipeId) : null
 

@@ -213,7 +213,7 @@ export function useGrocery() {
       myId: null,
       addItem: (item) => localAdd(item),
       addItems: (items) => items.forEach((item) => localAdd(item)),
-      toggleItem: (id, checked) => localToggle(id),
+      toggleItem: (id) => localToggle(id),
       removeItem: (id) => localRemove(id),
       updateItem: () => {},
       clearChecked: () => localClearChecked(),

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useAppStore, calculateStreak } from '../stores/useAppStore'
+import { localDateStr } from '../lib/dates'
 import { useRecipes } from '../hooks/useRecipes'
 import { usePartner } from '../hooks/usePartner'
 import { useCookLog } from '../hooks/useCookLog'
@@ -19,9 +20,9 @@ import ThumbnailPicker from '../components/ui/ThumbnailPicker'
 export default function Profile() {
   const { signOut, profile, updateProfile } = useAuth()
   const { data: recipes = [] } = useRecipes()
-  const { cookedDates, darkMode, setDarkMode } = useAppStore()
+  const { darkMode, setDarkMode } = useAppStore()
   const { inviteCode, partner, joinWithCode, unlinkPartner } = usePartner()
-  const { entries, myId, partnerId } = useCookLog()
+  const { entries, myId, partnerId, cookDates } = useCookLog()
   const [activeTab, setActiveTab] = useState('overview')
   const [joinCode, setJoinCode] = useState('')
   const [joining, setJoining] = useState(false)
@@ -31,7 +32,9 @@ export default function Profile() {
   const totalCooked = recipes.reduce((sum, r) => sum + (r.made_count || 0), 0)
   const avgRating = recipes.filter((r) => r.rating).reduce((sum, r, _, arr) => sum + r.rating / arr.length, 0)
 
-  const streak = calculateStreak(cookedDates)
+  // From the shared cook log, as on Home — the per-device list this used to
+  // read only knew about cooks logged on this phone.
+  const streak = calculateStreak(cookDates)
 
   const handleSignOut = async () => {
     await signOut()
@@ -108,8 +111,12 @@ export default function Profile() {
                   </div>
                   <button
                     onClick={async () => {
-                      await unlinkPartner()
-                      toast.success('Accounts unlinked')
+                      try {
+                        await unlinkPartner()
+                        toast.success('Accounts unlinked')
+                      } catch (err) {
+                        toast.error(err.message)
+                      }
                     }}
                     className="flex items-center gap-2 text-xs text-warm-400 dark:text-stone-500 hover:text-red-400 transition-colors"
                   >
@@ -437,7 +444,7 @@ function StoryTab() {
 function CompetitionCard({ entries, myId, partnerId, myName, partnerName }) {
   const monthStart = new Date()
   monthStart.setDate(1)
-  const monthStartStr = monthStart.toISOString().split('T')[0]
+  const monthStartStr = localDateStr(monthStart)
 
   const thisMonth = entries.filter((e) => e.date >= monthStartStr)
   const myCooks = thisMonth.filter((e) => e.userId === myId).length

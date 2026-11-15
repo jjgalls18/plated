@@ -16,6 +16,11 @@ const saveMockRecipes = (recipes) => {
   localStorage.setItem('plated-mock-recipes', JSON.stringify(recipes))
 }
 
+async function currentUserId() {
+  const { data } = await supabase.auth.getSession()
+  return data?.session?.user?.id || null
+}
+
 // --- Fetch all recipes ---
 export function useRecipes(search = '') {
   return useQuery({
@@ -78,6 +83,13 @@ export function useAddRecipe() {
         }
         saveMockRecipes([newRecipe, ...recipes])
         return newRecipe
+      }
+
+      // Record who added it. Only the homelab worker used to set this, so
+      // every recipe typed in, scanned or pulled from a web page had no author.
+      if (!recipe.created_by) {
+        const userId = await currentUserId()
+        if (userId) recipe = { ...recipe, created_by: userId }
       }
 
       const { data, error } = await supabase.from('recipes').insert(recipe).select().single()
@@ -195,7 +207,7 @@ export function useSimilarRecipes(recipe) {
 export function useLogMadeIt() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ recipeId, rating, notes, photoUrl }) => {
+    mutationFn: async ({ recipeId, rating, notes, photoUrl, userId }) => {
       if (!isSupabaseConfigured) {
         const recipes = getMockRecipes()
         const updated = recipes.map((r) =>
@@ -206,7 +218,11 @@ export function useLogMadeIt() {
         saveMockRecipes(updated)
         return { recipeId, rating }
       }
-      const { error } = await supabase.from('made_it_log').insert({ recipe_id: recipeId, rating, notes, photo_url: photoUrl || null })
+      // user_id is who cooked — the person picked in the modal, falling back
+      // to whoever is signed in. Without it the entry belongs to nobody and
+      // never counts toward either person's tally.
+      const cookId = userId || await currentUserId()
+      const { error } = await supabase.from('made_it_log').insert({ recipe_id: recipeId, user_id: cookId, rating, notes, photo_url: photoUrl || null })
       if (error) throw error
       const { error: err2 } = await supabase.rpc('increment_made_count', { recipe_id: recipeId })
       if (err2) throw err2
@@ -218,6 +234,7 @@ export function useLogMadeIt() {
     onSuccess: (_data, { recipeId }) => {
       qc.invalidateQueries({ queryKey: ['recipes'] })
       qc.invalidateQueries({ queryKey: ['recipe', recipeId] })
+      qc.invalidateQueries({ queryKey: ['cook-log'] })
     },
   })
 }

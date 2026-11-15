@@ -114,13 +114,7 @@ create index video_queue_status_idx on public.video_queue (status);
 
 -- ─── Functions ────────────────────────────────────────────────────────────────
 
-create or replace function public.increment_made_count(recipe_id uuid)
-returns void as $$
-  update public.recipes
-  set made_count = made_count + 1,
-      updated_at = now()
-  where id = recipe_id;
-$$ language sql security definer;
+-- Defined after is_linked_partner() below, which it depends on.
 
 -- ─── Schema-level grants ──────────────────────────────────────────────────────
 -- Required explicitly as of Supabase's May 30 2026 security policy change.
@@ -142,8 +136,6 @@ grant select, insert, update, delete on public.video_queue    to authenticated;
 
 -- ─── Function grants ──────────────────────────────────────────────────────────
 
-grant execute on function public.increment_made_count(uuid) to authenticated;
-
 -- ─── Row Level Security ───────────────────────────────────────────────────────
 
 alter table public.profiles      enable row level security;
@@ -155,12 +147,15 @@ alter table public.meal_plans     enable row level security;
 alter table public.couple_story   enable row level security;
 alter table public.video_queue    enable row level security;
 
--- Profiles: reads are open to all authenticated users (partner lookups, cook log
--- display names, invite-code joins all query other users' rows). Writes are
--- restricted to the profile owner.
-create policy "Profiles: read all"
+-- Profiles: readable by the owner and their linked partner only. They hold the
+-- calendar and share tokens, which are passwords in all but name. Writes are
+-- restricted to the profile owner, and partner_id is frozen for signed-in users
+-- by the protect_profile_link trigger below — is_linked_partner() trusts that
+-- column, so letting an account set its own would let it grant itself access
+-- to everything. See migrations/20261115_lock_down_profiles.sql.
+create policy "Profiles: read own and partner"
   on public.profiles for select
-  to authenticated using (true);
+  to authenticated using (id = auth.uid() or partner_id = auth.uid());
 
 create policy "Profiles: insert own"
   on public.profiles for insert
@@ -184,7 +179,41 @@ returns boolean as $$
   );
 $$ language sql stable security definer set search_path = public;
 
+revoke execute on function public.is_linked_partner() from public, anon;
 grant execute on function public.is_linked_partner() to authenticated;
+
+create or replace function public.increment_made_count(recipe_id uuid)
+returns void as $$
+  update public.recipes
+  set made_count = made_count + 1,
+      updated_at = now()
+  where id = recipe_id
+    and public.is_linked_partner();
+$$ language sql security definer set search_path = public;
+
+revoke execute on function public.increment_made_count(uuid) from public, anon;
+grant execute on function public.increment_made_count(uuid) to authenticated;
+
+-- Partner links are set in the SQL editor or by the service role, never by a
+-- signed-in user (auth.uid() is null for both of the former).
+create or replace function public.protect_profile_link()
+returns trigger as $$
+begin
+  if auth.uid() is not null then
+    if tg_op = 'INSERT' then
+      new.partner_id := null;
+    elsif new.partner_id is distinct from old.partner_id then
+      raise exception 'Partner links can only be changed by an administrator'
+        using errcode = '42501';
+    end if;
+  end if;
+  return new;
+end;
+$$ language plpgsql set search_path = public;
+
+create trigger protect_profile_link
+  before insert or update on public.profiles
+  for each row execute function public.protect_profile_link();
 
 create policy "Linked partners full access" on public.recipes
   for all to authenticated using (public.is_linked_partner()) with check (public.is_linked_partner());

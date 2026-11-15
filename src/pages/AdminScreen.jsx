@@ -10,6 +10,7 @@ import { useGrocery } from '../hooks/useGrocery'
 import { useRecipes } from '../hooks/useRecipes'
 import { useMealPlan } from '../hooks/useMealPlan'
 import { useCobaltStatus } from '../hooks/useCobaltStatus'
+import { localDateStr } from '../lib/dates'
 import { useErrorLog, formatErrorEntry } from '../stores/useErrorLog'
 import { isSupabaseConfigured } from '../lib/supabase'
 import { MOCK_RECIPES } from '../data/mockRecipes'
@@ -25,12 +26,12 @@ function getDailyData(aiCostLog, days = 14) {
   for (let i = days - 1; i >= 0; i--) {
     const d = new Date()
     d.setDate(d.getDate() - i)
-    const key = d.toISOString().split('T')[0]
+    const key = localDateStr(d)
     const label = d.toLocaleDateString('en', { weekday: 'short' }).slice(0, 1)
     result.push({ key, label, cost: 0 })
   }
   aiCostLog.forEach((e) => {
-    const key = new Date(e.ts).toISOString().split('T')[0]
+    const key = localDateStr(e.ts)
     const slot = result.find((d) => d.key === key)
     if (slot) slot.cost += e.cost
   })

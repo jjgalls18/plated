@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { calculateStreak, localDateStr } from '../lib/dates'
 
 export function calculateAiCosts(aiCostLog = []) {
   const now = new Date()
@@ -14,21 +15,8 @@ export function calculateAiCosts(aiCostLog = []) {
   }
 }
 
-export function calculateStreak(cookedDates = []) {
-  if (cookedDates.length === 0) return 0
-  const unique = [...new Set(cookedDates)].sort().reverse()
-  const today = new Date().toISOString().split('T')[0]
-  const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0]
-  if (unique[0] !== today && unique[0] !== yesterday) return 0
-  let count = 1
-  for (let i = 1; i < unique.length; i++) {
-    const expected = new Date(new Date(unique[i - 1]).getTime() - 86400000)
-      .toISOString().split('T')[0]
-    if (unique[i] === expected) count++
-    else break
-  }
-  return count
-}
+// Lives in lib/dates so tests can import it without loading the store.
+export { calculateStreak }
 
 export const useAppStore = create(
   persist(
@@ -52,7 +40,7 @@ export const useAppStore = create(
       // Cooked dates for streak tracking (YYYY-MM-DD strings)
       cookedDates: [],
       addCookedDate: () => set((s) => {
-        const today = new Date().toISOString().split('T')[0]
+        const today = localDateStr()
         if (s.cookedDates.includes(today)) return {}
         return { cookedDates: [today, ...s.cookedDates].slice(0, 365) }
       }),
@@ -60,7 +48,7 @@ export const useAppStore = create(
       // Per-person cook log — [{ date, person, recipeId, recipeTitle, recipeThumbnail }]
       cookLog: [],
       logCook: ({ person, recipeId, recipeTitle, recipeThumbnail }) => set((s) => {
-        const today = new Date().toISOString().split('T')[0]
+        const today = localDateStr()
         const cookedDates = s.cookedDates.includes(today)
           ? s.cookedDates
           : [today, ...s.cookedDates].slice(0, 365)

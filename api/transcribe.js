@@ -201,10 +201,13 @@ export default async function handler(req, res) {
 
 function getUrlType(url) {
   try {
+    // Exact host or a subdomain of it — a substring test would also accept
+    // "tiktok.com.example.net" and hand that to Cobalt.
     const host = new URL(url).hostname.toLowerCase()
-    if (host.includes('tiktok.com')) return 'tiktok'
-    if (host.includes('instagram.com')) return 'instagram'
-    if (host.includes('youtube.com') || host.includes('youtu.be')) return 'youtube'
+    const is = (domain) => host === domain || host.endsWith(`.${domain}`)
+    if (is('tiktok.com')) return 'tiktok'
+    if (is('instagram.com')) return 'instagram'
+    if (is('youtube.com') || is('youtu.be')) return 'youtube'
     return 'web'
   } catch {
     return 'web'

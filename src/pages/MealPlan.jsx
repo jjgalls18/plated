@@ -12,6 +12,7 @@ import { useAppStore } from '../stores/useAppStore'
 import { useRecipes } from '../hooks/useRecipes'
 import { useGrocery } from '../hooks/useGrocery'
 import { useMealPlan } from '../hooks/useMealPlan'
+import { localDateStr, weekDates as getWeekDates } from '../lib/dates'
 import PageHeader from '../components/ui/PageHeader'
 import toast from 'react-hot-toast'
 
@@ -26,17 +27,6 @@ function getDaySlots(mealPlan, date) {
   const v = mealPlan[date]
   if (!v || typeof v === 'string') return {}
   return v
-}
-
-function getWeekDates(offset = 0) {
-  const now = new Date()
-  const monday = new Date(now)
-  monday.setDate(now.getDate() - now.getDay() + 1 + offset * 7)
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(monday)
-    d.setDate(monday.getDate() + i)
-    return d.toISOString().split('T')[0]
-  })
 }
 
 function formatWeekRange(dates) {
@@ -120,7 +110,7 @@ export default function MealPlan() {
   const { data: recipes = [] } = useRecipes()
   const { addItems } = useGrocery()
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = localDateStr()
   const weekDates = getWeekDates(weekOffset)
 
   const calDate = useMemo(() => {

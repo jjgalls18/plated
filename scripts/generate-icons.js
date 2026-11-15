@@ -1,6 +1,5 @@
 import sharp from 'sharp'
 import { readFileSync } from 'fs'
-import { mkdirSync } from 'fs'
 
 const svg = readFileSync('./public/logo.svg')
 

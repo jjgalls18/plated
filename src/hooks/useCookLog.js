@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import { useAuth } from './useAuth'
 import { useAppStore } from '../stores/useAppStore'
+import { localDateStr } from '../lib/dates'
 
 const QUERY_KEY = ['cook-log']
 
@@ -30,15 +31,18 @@ export function useCookLog(limit = 100) {
 
       const { data, error } = await supabase
         .from('made_it_log')
-        .select('id, user_id, recipe_id, rating, notes, photo_url, created_at, recipes(id, title, thumbnail_url)')
-        .order('created_at', { ascending: false })
+        .select('id, user_id, recipe_id, rating, notes, photo_url, cooked_at, recipes(id, title, thumbnail_url)')
+        .order('cooked_at', { ascending: false })
         .limit(limit)
 
       if (error) throw error
 
       const entries = (data || []).map((e) => ({
         id: e.id,
-        date: e.created_at.split('T')[0],
+        // made_it_log's timestamp column is cooked_at. This used to ask for
+        // created_at, which doesn't exist, so the query failed outright and the
+        // cook history, streak and "who cooked more" cards stayed empty.
+        date: localDateStr(e.cooked_at),
         userId: e.user_id,
         recipeId: e.recipe_id,
         recipeTitle: e.recipes?.title || 'Unknown recipe',

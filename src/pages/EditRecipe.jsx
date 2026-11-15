@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Plus, X, GripVertical } from 'lucide-react'
+import { ArrowLeft, Plus, X } from 'lucide-react'
 import { useRecipe, useUpdateRecipe } from '../hooks/useRecipes'
 import ThumbnailPicker from '../components/ui/ThumbnailPicker'
 import toast from 'react-hot-toast'

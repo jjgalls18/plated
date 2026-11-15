@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import { useAuth } from './useAuth'
 import { useAppStore } from '../stores/useAppStore'
+import { addDays, mondayOf, parseLocalDate } from '../lib/dates'
 
 const QUERY_KEY = ['meal-plan']
 
@@ -10,18 +11,12 @@ const QUERY_KEY = ['meal-plan']
 // but the rest of the app works with a flat { 'YYYY-MM-DD': { breakfast?, lunch?, dinner? } }
 // map — convert at the edges so MealPlan.jsx/Home.jsx don't need to change shape.
 function toWeekStartAndDow(dateStr) {
-  const d = new Date(`${dateStr}T00:00:00`)
-  const jsDay = d.getDay() // 0=Sun..6=Sat
-  const mondayOffset = jsDay === 0 ? 6 : jsDay - 1
-  const monday = new Date(d)
-  monday.setDate(d.getDate() - mondayOffset)
-  return { weekStart: monday.toISOString().split('T')[0], dayOfWeek: mondayOffset }
+  const jsDay = parseLocalDate(dateStr).getDay() // 0=Sun..6=Sat
+  return { weekStart: mondayOf(dateStr), dayOfWeek: jsDay === 0 ? 6 : jsDay - 1 }
 }
 
 function fromWeekStartAndDow(weekStart, dayOfWeek) {
-  const monday = new Date(`${weekStart}T00:00:00`)
-  monday.setDate(monday.getDate() + dayOfWeek)
-  return monday.toISOString().split('T')[0]
+  return addDays(weekStart, dayOfWeek)
 }
 
 /**
@@ -65,11 +60,11 @@ export function useMealPlan() {
     return () => supabase.removeChannel(channel)
   }, [user, qc, channelId])
 
-  const rows = query.data || []
+  const rows = query.data
 
   const mealPlan = useMemo(() => {
     const out = {}
-    for (const row of rows) {
+    for (const row of rows || []) {
       const date = fromWeekStartAndDow(row.week_start, row.day_of_week)
       if (!out[date]) out[date] = {}
       out[date][row.meal_type] = row.recipe_id

@@ -1,10 +1,22 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { Search as SearchIcon, X, Plus, Shuffle, BookHeart } from 'lucide-react'
+import { Search as SearchIcon, X, Plus, Shuffle, BookHeart, ArrowUpDown } from 'lucide-react'
 import { useRecipes } from '../hooks/useRecipes'
 import RecipeCard, { RecipeCardHero, RecipeCardSkeleton } from '../components/ui/RecipeCard'
 import PageHeader from '../components/ui/PageHeader'
 import SectionTabs from '../components/ui/SectionTabs'
+import { SORTS, sortRecipes } from '../lib/recipeSort'
+
+const SORT_KEY = 'plated-recipe-sort'
+
+function savedSort() {
+  try {
+    const id = localStorage.getItem(SORT_KEY)
+    return SORTS.some((s) => s.id === id) ? id : 'newest'
+  } catch {
+    return 'newest'
+  }
+}
 
 const FILTER_TAGS = [
   'italian', 'asian', 'healthy', 'quick', 'dessert',
@@ -24,6 +36,13 @@ export default function Recipes() {
   const [searchParams] = useSearchParams()
   const [query, setQuery] = useState('')
   const [activeTag, setActiveTag] = useState(() => tagFromFilter(searchParams.get('filter')))
+  // Remembered per phone — whoever likes A to Z keeps A to Z.
+  const [sortId, setSortId] = useState(savedSort)
+
+  const changeSort = (id) => {
+    setSortId(id)
+    try { localStorage.setItem(SORT_KEY, id) } catch { /* private mode — just not remembered */ }
+  }
 
   // Which view is showing comes from the URL, not local state, so the section
   // tabs can select it from the Grocery page too.
@@ -38,11 +57,14 @@ export default function Recipes() {
   }, [view])
 
   const favorites = recipes.filter((r) => r.is_favorite)
-  const displayed = view === 'cookbook'
-    ? favorites
-    : activeTag
-      ? recipes.filter((r) => r.tags?.includes(activeTag))
-      : recipes
+  const displayed = sortRecipes(
+    view === 'cookbook'
+      ? favorites
+      : activeTag
+        ? recipes.filter((r) => r.tags?.includes(activeTag))
+        : recipes,
+    sortId
+  )
 
   const handleSurprise = () => {
     if (!recipes.length) return
@@ -74,13 +96,32 @@ export default function Recipes() {
 
       {/* Title + search */}
       <div className="px-5 pt-3 pb-4">
-        <div className="mb-4">
-          <h1 className="font-display text-3xl font-bold text-gray-900 dark:text-stone-50">Recipes</h1>
-          {!isLoading && (
-            <p className="text-warm-400 dark:text-stone-500 text-sm mt-0.5">
-              {recipes.length} recipe{recipes.length !== 1 ? 's' : ''} saved
-            </p>
-          )}
+        <div className="mb-4 flex items-end justify-between gap-3">
+          <div>
+            <h1 className="font-display text-3xl font-bold text-gray-900 dark:text-stone-50">Recipes</h1>
+            {!isLoading && (
+              <p className="text-warm-400 dark:text-stone-500 text-sm mt-0.5">
+                {recipes.length} recipe{recipes.length !== 1 ? 's' : ''} saved
+              </p>
+            )}
+          </div>
+
+          {/* A native select: on a phone it opens the system picker, which is
+              easier to hit than any custom menu. */}
+          <label className="relative flex items-center gap-1.5 bg-white dark:bg-stone-800 rounded-full shadow-card pl-3 pr-3 py-2 text-xs font-semibold text-gray-700 dark:text-stone-200 flex-shrink-0">
+            <ArrowUpDown size={13} className="text-primary" />
+            <span>{SORTS.find((s) => s.id === sortId)?.label}</span>
+            <select
+              aria-label="Sort recipes"
+              value={sortId}
+              onChange={(e) => changeSort(e.target.value)}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+            >
+              {SORTS.map((s) => (
+                <option key={s.id} value={s.id}>{s.label}</option>
+              ))}
+            </select>
+          </label>
         </div>
 
         {/* Search bar — All Recipes only; Our Cookbook is a small curated browsing list */}

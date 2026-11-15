@@ -88,8 +88,11 @@ export function usePartner() {
   const unlinkPartner = async () => {
     if (!user || !partner || !isSupabaseConfigured) return
 
-    await supabase.from('profiles').update({ partner_id: null }).eq('id', user.id)
-    await supabase.from('profiles').update({ partner_id: null }).eq('id', partner.id)
+    // Partner links are frozen for signed-in users at the database level
+    // (migrations/20261115_lock_down_profiles.sql), so this is refused. Say so
+    // rather than showing "unlinked" until the next reload.
+    const { error } = await supabase.from('profiles').update({ partner_id: null }).eq('id', user.id)
+    if (error) throw new Error('Accounts can only be unlinked from the database')
     setPartner(null)
   }
 
